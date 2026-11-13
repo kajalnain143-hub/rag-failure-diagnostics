@@ -1,82 +1,113 @@
 # RAG Failure Diagnostics & Evaluation Platform
 
-An AI-powered platform designed to identify, analyze, and evaluate failures in Retrieval-Augmented Generation (RAG) systems.
+A lightweight, full-stack MVP for inspecting retrieval quality and diagnosing common failure patterns in Retrieval-Augmented Generation (RAG) workflows.
 
-## Overview
+> **Current implementation:** document ingestion, text chunking, TF-IDF retrieval, retrieval diagnostics, a baseline lexical evaluation metric, and a React dashboard. This version does not yet generate LLM answers or claim to detect hallucinations.
 
-Retrieval-Augmented Generation (RAG) systems can produce incorrect, incomplete, or irrelevant answers due to retrieval failures, poor context quality, or generation issues.
+## Features
 
-This project aims to build a diagnostic and evaluation platform that helps developers understand why a RAG pipeline fails and how its performance can be improved.
-
-## Problem Statement
-
-Traditional RAG applications often lack proper visibility into:
-
-- Incorrect document retrieval
-- Missing or irrelevant context
-- Hallucinated responses
-- Poor answer relevance
-- Retrieval and generation performance
-
-This platform aims to make these failures measurable and easier to debug.
-
-## Planned Features
-
-- RAG pipeline evaluation
-- Retrieval quality analysis
-- Context relevance checking
-- Hallucination detection experiments
-- Failure categorization
-- Evaluation metrics and reports
-- Interactive diagnostic dashboard
-
-## Planned Tech Stack
-
-| Component | Technology |
-|---|---|
-| Programming Language | Python |
-| Backend | FastAPI |
-| Frontend | React |
-| Database | PostgreSQL |
-| Vector Search | FAISS / pgvector |
-| AI Integration | LLMs and Embeddings |
-| Evaluation | RAGAS |
-| Deployment | Docker |
+- Upload PDF, TXT, and Markdown documents
+- Extract text and split it into overlapping chunks
+- Store documents and chunks in SQLite
+- Retrieve relevant chunks using TF-IDF and cosine similarity
+- Inspect similarity scores and retrieval diagnostics
+- Compare retrieved context with a supplied reference answer
+- Use a React dashboard to upload, query, and inspect results
 
 ## Architecture
 
-The planned system will contain:
+```text
+rag-failure-diagnostics/
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── database.py
+│   │   ├── diagnostics.py
+│   │   ├── main.py
+│   │   ├── rag_engine.py
+│   │   └── schemas.py
+│   └── requirements.txt
+└── frontend/
+    ├── src/
+    │   ├── App.jsx
+    │   ├── main.jsx
+    │   └── styles.css
+    ├── index.html
+    ├── package.json
+    └── vite.config.js
+```
 
-1. Document Ingestion
-2. Chunking and Embedding
-3. Vector Retrieval
-4. Context Evaluation
-5. LLM Response Generation
-6. Failure Detection
-7. Evaluation Dashboard
+## Requirements
 
-## Project Status
+- Python 3.10 or newer
+- Node.js 18 or newer
+- npm
 
-🚧 Under Active Development
+## Run locally on Windows
 
-The project is currently in its initial development phase. Features and architecture will evolve as implementation progresses.
+### 1. Clone the repository
 
-## Learning Objectives
+```bash
+git clone https://github.com/kajalnain143-hub/rag-failure-diagnostics.git
+cd rag-failure-diagnostics
+```
 
-- Understand RAG architecture
-- Build production-oriented AI applications
-- Evaluate LLM and retrieval performance
-- Develop debugging and diagnostic workflows
-- Learn backend and frontend integration
+### 2. Start the backend
 
-## Future Scope
+Open a terminal:
 
-- Advanced RAG evaluation
-- Automated failure analysis
-- Experiment comparison
-- Performance benchmarking
-- Detailed diagnostic reports
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
 
----
+The API will be available at http://localhost:8000. Interactive API documentation: http://localhost:8000/docs.
 
-**Built with Python, AI, and a focus on reliable RAG systems.**
+### 3. Start the frontend
+
+Open a second terminal from the project root:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the local URL printed by Vite, normally http://localhost:5173.
+
+## API endpoints
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/` | API welcome message |
+| GET | `/health` | Health check |
+| GET | `/api/documents` | List indexed documents |
+| POST | `/api/documents/upload` | Upload and index a document |
+| POST | `/api/query` | Retrieve chunks and diagnose retrieval |
+| POST | `/api/evaluate` | Compare retrieved context with a reference answer |
+
+## Evaluation notes
+
+The current retrieval engine uses TF-IDF lexical features and cosine similarity. The reference-answer coverage metric measures lexical overlap only. These metrics are useful for a transparent baseline, but they are not substitutes for semantic evaluation, factuality checks, or human review.
+
+## Roadmap
+
+- [x] Initial FastAPI service
+- [x] Document upload and text extraction
+- [x] Chunking and SQLite persistence
+- [x] TF-IDF retrieval baseline
+- [x] Retrieval diagnostics and lexical evaluation
+- [x] React dashboard
+- [ ] Automated test suite
+- [ ] Embedding-based semantic retrieval
+- [ ] LLM answer generation with source citations
+- [ ] RAGAS-based evaluation
+- [ ] Experiment history and comparison
+- [ ] Docker deployment
+
+## Project status
+
+**MVP under active development.** Features will be expanded and validated as the project evolves.
