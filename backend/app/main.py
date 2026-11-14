@@ -26,7 +26,7 @@ from .answer_quality import context_precision_recall, evaluate_answer_grounding
 from .trace_store import init_trace_store, save_trace, list_traces, get_trace
 from .benchmark_runner import ALLOWED_STRATEGIES, run_dataset
 from .benchmark_regression import compare_benchmark_runs
-from .benchmark_reports import build_benchmark_report, REPORT_METRICS
+from .benchmark_reports import build_benchmark_report, build_benchmark_insights, REPORT_METRICS
 from .benchmark_snapshots import init_snapshot_store, create_snapshot, get_snapshot, SnapshotIntegrityError
 
 app = FastAPI(
@@ -475,6 +475,14 @@ def benchmark_report(dataset_name: str, strategy: str):
     if not report["run_count"]:
         raise HTTPException(status_code=404, detail="No batch benchmark history found for this dataset and strategy.")
     return report
+
+
+@app.get("/api/benchmark/insights")
+def benchmark_insights(dataset_name: str):
+    """Return comparable latest strategy scorecards and deterministic recommendations."""
+    if not dataset_name.strip() or len(dataset_name) > 120:
+        raise HTTPException(status_code=400, detail="dataset_name must contain 1–120 characters.")
+    return build_benchmark_insights(list_experiments(100), dataset_name)
 
 
 @app.get("/api/benchmark/report.csv")
