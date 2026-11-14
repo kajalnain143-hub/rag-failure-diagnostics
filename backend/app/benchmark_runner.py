@@ -20,7 +20,7 @@ def _percentile(values: list[float], percentile: float) -> float:
 
 def run_dataset(dataset_name: str, cases: list[dict], strategies: list[str],
                 chunks: list[dict], embed_query, retrieve, save_experiment,
-                mmr_diversity: float = 0.35) -> dict:
+                mmr_diversity: float = 0.35, snapshot: dict | None = None) -> dict:
     """Run every case against each selected strategy and persist aggregate runs."""
     output = {}
     for strategy in strategies:
@@ -56,7 +56,10 @@ def run_dataset(dataset_name: str, cases: list[dict], strategies: list[str],
         run_id = save_experiment(
             f"Batch benchmark · {dataset_name} · {strategy}",
             {"dataset_name": dataset_name, "strategy": strategy,
-             "case_count": len(cases), "mmr_diversity": mmr_diversity},
+             "case_count": len(cases), "mmr_diversity": mmr_diversity,
+             "snapshot_id": snapshot.get("snapshot_id") if snapshot else None,
+             "corpus_fingerprint": snapshot.get("corpus_fingerprint") if snapshot else None,
+             "dataset_fingerprint": snapshot.get("dataset_fingerprint") if snapshot else None},
             metrics,
             "Automated batch run; latency includes query embedding where used and retrieval.",
         )
@@ -66,6 +69,9 @@ def run_dataset(dataset_name: str, cases: list[dict], strategies: list[str],
     return {
         "dataset_name": dataset_name,
         "case_count": len(cases),
+        "snapshot_id": snapshot.get("snapshot_id") if snapshot else None,
+        "corpus_fingerprint": snapshot.get("corpus_fingerprint") if snapshot else None,
+        "dataset_fingerprint": snapshot.get("dataset_fingerprint") if snapshot else None,
         "strategies": output,
         "metric_note": "Ranking scores depend on manual relevant_chunk_ids labels; evidence coverage is lexical overlap. Latency is measured on this API process and corpus.",
     }
