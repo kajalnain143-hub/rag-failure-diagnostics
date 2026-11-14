@@ -35,6 +35,9 @@ export default function App() {
   const [baselineRunId, setBaselineRunId] = useState("");
   const [currentRunId, setCurrentRunId] = useState("");
   const [regressionResult, setRegressionResult] = useState(null);
+  const [reportDatasetName, setReportDatasetName] = useState("my-rag-regression-suite");
+  const [reportStrategy, setReportStrategy] = useState("hybrid");
+  const [benchmarkReport, setBenchmarkReport] = useState(null);
   const [qualityResult, setQualityResult] = useState(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -253,6 +256,23 @@ export default function App() {
       setBatchResult(data);
       await loadExperiments();
       setMessage(`Batch benchmark complete: ${data.case_count} cases across ${Object.keys(data.strategies).length} strategies. Runs saved.`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setDashboardBusy(false);
+    }
+  }
+
+  async function generateBenchmarkReport() {
+    if (!reportDatasetName.trim()) return setMessage("Enter a dataset name for the report.");
+    setDashboardBusy(true);
+    setMessage("");
+    setBenchmarkReport(null);
+    try {
+      const query = new URLSearchParams({ dataset_name: reportDatasetName.trim(), strategy: reportStrategy });
+      const data = await apiRequest(`/api/benchmark/report?${query.toString()}`);
+      setBenchmarkReport(data);
+      setMessage(`Loaded ${data.run_count} historical benchmark run(s).`);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -531,6 +551,36 @@ export default function App() {
         </div>
         <p className="hint">Latest metrics are taken from the most recent saved run. A dash means that metric was not part of that run.</p>
         <div className="subsection">
+          <div className="eyebrow">HISTORICAL BENCHMARK REPORT</div>
+          <h3>Metric trends & export</h3>
+          <p className="hint">Enter the exact dataset name used in batch runs. The report shows saved history for one retrieval strategy.</p>
+          <div className="report-controls">
+            <label>Dataset name<input value={reportDatasetName} onChange={e => setReportDatasetName(e.target.value)} placeholder="Exact dataset name" /></label>
+            <label>Strategy<select value={reportStrategy} onChange={e => setReportStrategy(e.target.value)}>
+              <option value="tfidf">TF-IDF</option><option value="hybrid">Hybrid</option><option value="hybrid_mmr">Hybrid MMR</option>
+            </select></label>
+            <button onClick={generateBenchmarkReport} disabled={dashboardBusy}>{dashboardBusy ? "Generating..." : "Generate report"}</button>
+          </div>
+          {benchmarkReport && <>
+            <div className="metric-grid">
+              {Object.entries(benchmarkReport.trends).map(([metric, trend]) => <div className="metric-card" key={metric}>
+                <strong>{trend.latest === null ? "—" : trend.latest.toFixed(3)}</strong>
+                <span>{metric.replaceAll("_", " ")} · first-to-latest {trend.delta > 0 ? "+" : ""}{trend.delta.toFixed(3)}</span>
+              </div>)}
+            </div>
+            <p className="hint">{benchmarkReport.run_count} runs · {benchmarkReport.dataset_name} · {benchmarkReport.strategy}</p>
+            <div className="table-wrap"><table className="experiment-table">
+              <thead><tr><th>Run</th><th>Date</th><th>Recall@K</th><th>MRR</th><th>nDCG@K</th><th>Avg latency</th></tr></thead>
+              <tbody>{benchmarkReport.history.map(run => <tr key={run.run_id}>
+                <td>#{run.run_id}</td><td>{run.created_at}</td><td>{run.metrics.recall_at_k.toFixed(3)}</td>
+                <td>{run.metrics.mrr.toFixed(3)}</td><td>{run.metrics.ndcg_at_k.toFixed(3)}</td><td>{run.metrics.latency_avg_ms.toFixed(2)} ms</td>
+              </tr>)}</tbody>
+            </table></div>
+            <a className="report-download" href={`${API}/api/benchmark/report.csv?dataset_name=${encodeURIComponent(reportDatasetName.trim())}&strategy=${encodeURIComponent(reportStrategy)}`}>Download CSV report</a>
+            <p className="hint">{benchmarkReport.note}</p>
+          </>}
+        </div>
+<div className="subsection">
           <div className="eyebrow">AUTOMATED QUALITY GATE</div>
           <h3>Baseline vs current benchmark</h3>
           <p className="hint">Compare two saved batch runs from the same dataset, strategy and case count. A quality metric is flagged when it drops by more than 0.05 (5 percentage points).</p>
