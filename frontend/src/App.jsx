@@ -67,7 +67,8 @@ export default function App() {
 
   useEffect(() => {
     loadDocuments();
-    loadExperiments().catch(() => {});\n    loadTraces().catch(() => {});
+    loadExperiments().catch(() => {});
+    loadTraces().catch(() => {});
   }, []);
 
   async function uploadDocument(event) {
@@ -102,7 +103,8 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, top_k: 4 })
       });
-      setResult(data);\n      await loadTraces();
+      setResult(data);
+      await loadTraces();
     } catch (error) {
       setMessage(error.message);
     } finally {
