@@ -27,7 +27,7 @@ from .trace_store import init_trace_store, save_trace, list_traces, get_trace
 from .benchmark_runner import ALLOWED_STRATEGIES, run_dataset
 from .benchmark_regression import compare_benchmark_runs
 from .benchmark_reports import build_benchmark_report, REPORT_METRICS
-from .benchmark_snapshots import init_snapshot_store, create_snapshot, get_snapshot
+from .benchmark_snapshots import init_snapshot_store, create_snapshot, get_snapshot, SnapshotIntegrityError
 
 app = FastAPI(
     title="RAG Failure Diagnostics API",
@@ -429,7 +429,10 @@ def benchmark_regression_check(payload: dict):
 
 @app.get("/api/benchmark/snapshots/{snapshot_id}")
 def read_benchmark_snapshot(snapshot_id: int):
-    snapshot = get_snapshot(snapshot_id)
+    try:
+        snapshot = get_snapshot(snapshot_id)
+    except SnapshotIntegrityError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if snapshot is None:
         raise HTTPException(status_code=404, detail="Benchmark snapshot not found.")
     return snapshot
@@ -437,7 +440,10 @@ def read_benchmark_snapshot(snapshot_id: int):
 
 @app.post("/api/benchmark/snapshots/{snapshot_id}/replay")
 def replay_benchmark_snapshot(snapshot_id: int, payload: dict):
-    snapshot = get_snapshot(snapshot_id)
+    try:
+        snapshot = get_snapshot(snapshot_id)
+    except SnapshotIntegrityError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if snapshot is None:
         raise HTTPException(status_code=404, detail="Benchmark snapshot not found.")
     strategies = payload.get("strategies", ["tfidf", "hybrid", "hybrid_mmr"])
