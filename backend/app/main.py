@@ -28,6 +28,7 @@ from .benchmark_runner import ALLOWED_STRATEGIES, run_dataset
 from .benchmark_regression import compare_benchmark_runs
 from .benchmark_reports import build_benchmark_report, build_benchmark_insights, REPORT_METRICS
 from .benchmark_failure_analytics import analyze_benchmark_failures
+from .query_failure_diagnostics import diagnose_query_failure
 from .incident_store import init_incident_store, save_incident, list_incidents, get_incident, incident_pattern_summary, incident_trace_analytics
 from .benchmark_snapshots import init_snapshot_store, create_snapshot, get_snapshot, SnapshotIntegrityError
 from .security import FixedWindowRateLimiter, valid_bearer_token
@@ -415,8 +416,10 @@ def compare_retrieval_strategies(payload: dict):
                 question, chunks, k, query_embedding=query_vector,
                 strategy=strategy, mmr_diversity=diversity,
             )
+            case_metrics = evaluate_case(payload, retrieved, k)
             comparisons[strategy] = {
-                "metrics": evaluate_case(payload, retrieved, k),
+                "metrics": case_metrics,
+                "failure_diagnostics": diagnose_query_failure(case_metrics),
                 "retrieved_chunks": retrieved,
             }
         summary = aggregate_metrics([row["metrics"] for row in comparisons.values()])
