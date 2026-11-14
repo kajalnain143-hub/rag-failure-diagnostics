@@ -1,5 +1,9 @@
 # RAG Failure Diagnostics & Evaluation Platform
 
+**Live demo:** https://rag-failure-diagnostics-web-live.onrender.com  
+**Backend health:** https://rag-failure-diagnostics-api-kajal.onrender.com/health  
+**Repository:** https://github.com/kajalnain143-hub/rag-failure-diagnostics
+
 A full-stack RAG workbench focused on diagnosing retrieval and answer-generation failures. Current capabilities include document ingestion, TF-IDF retrieval, transparent retrieval diagnostics, Gemini-grounded answer generation, and an initial automated test suite.
 
 ## Current capabilities
@@ -202,7 +206,7 @@ The expected-answer coverage score measures lexical term overlap between the ref
 - [ ] PostgreSQL + pgvector storage option (not implemented)
 - [x] Docker and CI workflow configuration (execution still pending verification)
 - [x] Optional bearer-token API authentication and configurable process-local rate limiting
-- [x] Production-oriented Docker images, health checks, non-root backend, and deployment checklist\n- [ ] Cloud deployment and public demo
+- [x] Production-oriented Docker images, health checks, non-root backend, and deployment checklist\n- [x] Render backend and frontend services deployed (workflow-level smoke tests still pending)
 
 ## Project status and completion gates
 
@@ -211,7 +215,7 @@ The expected-answer coverage score measures lexical term overlap between the ref
 **Not yet verified / not included in a 100% completion claim:**
 - GitHub Actions runs must finish successfully. A queued run is not a passing test.
 - Docker images and the full Windows setup must be built and exercised.
-- Render backend and frontend must both reach Live; health, authenticated API, browser CORS, upload, Gemini query, benchmark and incident workflows must be smoke-tested.
+- The Render backend and frontend are deployed and marked Live. The backend health check has returned HTTP 200 in Render logs; authenticated API, browser CORS, upload, Gemini query, benchmark and incident workflows still need an end-to-end browser/API smoke test.
 - The current Render Blueprint stores SQLite under `/tmp`, which is ephemeral. Documents, traces, incidents and benchmark history can be lost on restart/redeploy. Durable hosted use needs persistent storage and backups.
 - PostgreSQL + pgvector is not implemented. Current dense retrieval uses Gemini embeddings stored with SQLite.
 - A real manually labeled corpus benchmark and real Gemini answer-grounding review are required before publishing performance claims.
