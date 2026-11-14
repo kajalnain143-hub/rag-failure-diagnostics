@@ -25,6 +25,7 @@ from .evaluation_metrics import aggregate_metrics, evaluate_case
 from .answer_quality import context_precision_recall, evaluate_answer_grounding
 from .trace_store import init_trace_store, save_trace, list_traces, get_trace
 from .benchmark_runner import ALLOWED_STRATEGIES, run_dataset
+from .benchmark_optimizer import rank_mmr_sweep
 from .benchmark_regression import compare_benchmark_runs
 from .benchmark_reports import build_benchmark_report, build_benchmark_insights, REPORT_METRICS
 from .benchmark_failure_analytics import analyze_benchmark_failures
@@ -496,6 +497,70 @@ def run_batch_benchmark(payload: dict):
                            embed_query, retrieve, save_experiment, float(diversity), snapshot)
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/benchmark/tune-mmr")
+def tune_mmr_parameters(payload: dict):
+    """Run a bounded MMR-diversity sweep on identical labeled corpus inputs."""
+    dataset_name = str(payload.get("dataset_name", "mmr-tuning")).strip()
+    cases = payload.get("cases")
+    diversity_values = payload.get("diversity_values", [0.0, 0.2, 0.35, 0.5, 0.7, 1.0])
+    if not dataset_name or len(dataset_name) > 120:
+        raise HTTPException(status_code=400, detail="dataset_name must contain 1–120 characters.")
+    if not isinstance(cases, list) or not 1 <= len(cases) <= 50:
+        raise HTTPException(status_code=400, detail="cases must contain 1–50 labeled cases for a tuning sweep.")
+    if (not isinstance(diversity_values, list) or not 2 <= len(diversity_values) <= 7
+            or any(isinstance(value, bool) or not isinstance(value, (int, float))
+                   or not 0 <= value <= 1 for value in diversity_values)
+            or len(set(diversity_values)) != len(diversity_values)):
+        raise HTTPException(status_code=400, detail="diversity_values must contain 2–7 unique numbers between 0 and 1.")
+    seen_ids, clean_cases = set(), []
+    for index, case in enumerate(cases):
+        if not isinstance(case, dict):
+            raise HTTPException(status_code=400, detail=f"Case {index + 1} must be an object.")
+        query_id, question = case.get("query_id"), case.get("question")
+        relevant, reference = case.get("relevant_chunk_ids"), case.get("reference_answer")
+        if not isinstance(query_id, str) or not query_id.strip() or query_id in seen_ids:
+            raise HTTPException(status_code=400, detail=f"Case {index + 1} needs a unique non-empty query_id.")
+        if not isinstance(question, str) or not question.strip() or len(question) > 2000:
+            raise HTTPException(status_code=400, detail=f"Case {query_id} needs a question of 1–2000 characters.")
+        if (not isinstance(relevant, list) or not relevant
+                or any(isinstance(item, bool) or not isinstance(item, int) for item in relevant)
+                or len(set(relevant)) != len(relevant)):
+            raise HTTPException(status_code=400, detail=f"Case {query_id} needs unique integer relevant_chunk_ids.")
+        if not isinstance(reference, str) or not reference.strip():
+            raise HTTPException(status_code=400, detail=f"Case {query_id} needs a non-empty reference_answer.")
+        k = case.get("k", 5)
+        if isinstance(k, bool) or not isinstance(k, int) or not 1 <= k <= 10:
+            raise HTTPException(status_code=400, detail=f"Case {query_id}: k must be an integer from 1 to 10.")
+        seen_ids.add(query_id)
+        clean_cases.append({"query_id": query_id, "question": question.strip(),
+                            "relevant_chunk_ids": relevant, "reference_answer": reference, "k": k})
+    chunks = get_all_chunks()
+    if not chunks:
+        raise HTTPException(status_code=400, detail="Upload documents before tuning MMR.")
+    results = []
+    try:
+        for value in diversity_values:
+            diversity = float(value)
+            snapshot = create_snapshot(dataset_name, clean_cases, chunks, diversity)
+            run = run_dataset(dataset_name, clean_cases, ["hybrid_mmr"], chunks,
+                              embed_query, retrieve, save_experiment, diversity, snapshot)
+            strategy_result = run["strategies"]["hybrid_mmr"]
+            results.append({
+                "mmr_diversity": diversity,
+                "experiment_id": strategy_result["experiment_id"],
+                "snapshot_id": snapshot.get("snapshot_id"),
+                "metrics": strategy_result["metrics"],
+            })
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "dataset_name": dataset_name,
+        "case_count": len(clean_cases),
+        "sweep_count": len(results),
+        **rank_mmr_sweep(results),
+    }
 
 
 @app.post("/api/benchmark/regression")
