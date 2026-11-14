@@ -22,6 +22,7 @@ export default function App() {
     k: 5
   }, null, 2));
   const [benchmarkResult, setBenchmarkResult] = useState(null);\n  const [comparisonResult, setComparisonResult] = useState(null);
+  const [qualityResult, setQualityResult] = useState(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [dashboardBusy, setDashboardBusy] = useState(false);
@@ -202,6 +203,53 @@ export default function App() {
     }
   }
 
+  async function evaluateAnswerQuality() {
+    if (!result?.answer || !result?.retrieved_chunks?.length) {
+      setMessage("Run a knowledge-base query first so there is an answer and retrieved evidence to evaluate.");
+      return;
+    }
+    setDashboardBusy(true);
+    setMessage("");
+    setQualityResult(null);
+    try {
+      let relevantIds;
+      try {
+        const parsed = JSON.parse(benchmarkCase);
+        if (Array.isArray(parsed.relevant_chunk_ids)) relevantIds = parsed.relevant_chunk_ids;
+      } catch {
+        // Faithfulness judging does not require a labeled benchmark case.
+      }
+      const payload = {
+        question: result.question,
+        answer: result.answer,
+        retrieved_chunk_ids: result.retrieved_chunks.map(chunk => chunk.chunk_id)
+      };
+      if (relevantIds) payload.relevant_chunk_ids = relevantIds;
+      const data = await apiRequest("/api/quality/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      setQualityResult(data);
+      await apiRequest("/api/experiments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `Answer quality · ${result.question.slice(0, 48)}`,
+          config: { method: "gemini-llm-as-judge", retrieved_chunk_ids: payload.retrieved_chunk_ids },
+          metrics: { faithfulness_score: data.grounding.faithfulness_score, hallucination_detected: data.grounding.hallucination_detected, ...(data.context_metrics || {}) },
+          notes: "Model-assisted answer grounding evaluation; inspect claim-level evidence."
+        })
+      });
+      await loadExperiments();
+      setMessage("Answer grounding evaluated and saved to experiment history.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setDashboardBusy(false);
+    }
+  }
+
   async function refreshDashboard() {
     setDashboardBusy(true);
     try {
@@ -312,6 +360,33 @@ export default function App() {
         <textarea value={expected} onChange={e => setExpected(e.target.value)} placeholder="Enter the expected answer..." rows="3" />
         <button className="secondary" onClick={runEvaluation} disabled={busy}>{busy ? "Evaluating..." : "Evaluate & save experiment"}</button>
         {evaluation && <div className="evaluation"><strong>{(evaluation.evaluation.expected_answer_term_coverage * 100).toFixed(1)}%</strong><span>Expected-answer term coverage</span><p>{evaluation.evaluation.interpretation}</p></div>}
+        <div className="subsection">
+          <div className="eyebrow">ANSWER GROUNDING EVALUATION</div>
+          <h3>Faithfulness & hallucination check</h3>
+          <p className="hint">Run a knowledge-base query above first. Gemini will inspect the generated answer against its retrieved chunks. Optionally, the labeled benchmark IDs are used for context precision and recall.</p>
+          <button className="secondary" onClick={evaluateAnswerQuality} disabled={dashboardBusy || !result}>
+            {dashboardBusy ? "Evaluating..." : "Evaluate answer faithfulness"}
+          </button>
+          {qualityResult && <div className="results">
+            <div className="diagnostic">
+              <div><div className="eyebrow">FAITHFULNESS · {qualityResult.grounding.judge}</div><strong>{(qualityResult.grounding.faithfulness_score * 100).toFixed(1)}%</strong></div>
+              <div className="score">{qualityResult.grounding.hallucination_detected ? "Detected" : "None"}<small>unsupported claims</small></div>
+            </div>
+            {qualityResult.grounding.unsupported_claims.length > 0 && <>
+              <h3>Unsupported claims</h3>
+              {qualityResult.grounding.unsupported_claims.map((claim, i) => <p className="issue" key={i}>⚠ {claim}</p>)}
+            </>}
+            {qualityResult.grounding.supported_claims.length > 0 && <>
+              <h3>Supported claims</h3>
+              {qualityResult.grounding.supported_claims.map((claim, i) => <p className="recommendation" key={i}>✓ {claim}</p>)}
+            </>}
+            {qualityResult.context_metrics && <div className="metric-grid">
+              <div className="metric-card"><strong>{qualityResult.context_metrics.context_precision.toFixed(3)}</strong><span>Context precision</span></div>
+              <div className="metric-card"><strong>{qualityResult.context_metrics.context_recall.toFixed(3)}</strong><span>Context recall</span></div>
+            </div>}
+            <p className="hint">{qualityResult.grounding.limitations}</p>
+          </div>}
+        </div>
         <div className="subsection">
           <div className="eyebrow">LABELED RETRIEVAL BENCHMARK</div>
           <h3>Run Recall@K · MRR · nDCG@K</h3>
