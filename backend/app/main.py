@@ -125,8 +125,8 @@ def list_documents():
 
 @app.post("/api/documents/upload")
 async def upload_document(file: UploadFile = File(...)):
-    filename = Path(file.filename or "uploaded-document").name
-    content = await file.read()
+    filename = Path((file.filename or "uploaded-document").replace("\\\\", "/")).name
+    content = await file.read(10 * 1024 * 1024 + 1)
     if not content:
         raise HTTPException(status_code=400, detail="The uploaded file is empty.")
     if len(content) > 10 * 1024 * 1024:
