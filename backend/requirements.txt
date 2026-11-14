@@ -8,3 +8,4 @@ python-dotenv
 pytest
 httpx
 numpy
+psycopg[binary]>=3.2,<4
