@@ -13,6 +13,16 @@ scores. Each case contains:
 The deterministic evaluator reports Recall@K, MRR, nDCG@K, and lexical evidence-term
 coverage. It does not claim semantic correctness or answer faithfulness.
 
+## Building a benchmark from your own uploaded documents
+
+1. Upload a small, representative set of documents through the dashboard.
+2. Call authenticated `GET /api/benchmark/corpus` to retrieve actual indexed chunk IDs and their text.
+3. Write questions whose answers are supported by the corpus. For each question, manually identify the relevant chunk IDs and write a reference answer.
+4. Replace the placeholder IDs in your dataset with the actual integer IDs returned by the corpus endpoint.
+5. Run `POST /api/benchmark/run` with the labeled cases and compare the strategies.
+
+The corpus endpoint returns at most 500 chunks to keep responses bounded. Chunk IDs can change when documents are re-uploaded or the database is recreated, so create fresh labels after rebuilding the knowledge base. Do not use the starter example IDs as if they were real corpus IDs.
+
 ## Retrieval strategy comparison
 
 The API also exposes `POST /api/benchmark/compare`. Submit the same labeled case
