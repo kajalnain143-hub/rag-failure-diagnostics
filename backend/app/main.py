@@ -45,7 +45,8 @@ def extract_text(filename: str, content: bytes) -> str:
             reader = PdfReader(BytesIO(content))
             if reader.is_encrypted:
                 raise HTTPException(status_code=400, detail="Password-protected PDFs are not supported.")
-            return "\n".join(page.extract_text() or "" for page in reader.pages)
+            return "
+".join(page.extract_text() or "" for page in reader.pages)
         except HTTPException:
             raise
         except Exception as exc:
@@ -80,7 +81,8 @@ async def upload_document(file: UploadFile = File(...)):
     chunks = split_into_chunks(text)
     if not chunks:
         raise HTTPException(status_code=400, detail="No readable text was found in the document.")
-    embeddings = [embed_text(chunk) for chunk in chunks]\n    document_id = save_document(filename, chunks, embeddings, EMBEDDING_MODEL)
+    embeddings = [embed_text(chunk) for chunk in chunks]
+    document_id = save_document(filename, chunks, embeddings, EMBEDDING_MODEL)
     return {"message": "Document uploaded and indexed successfully.", "document_id": document_id,
             "filename": filename, "chunk_count": len(chunks)}
 
@@ -90,7 +92,8 @@ def query_documents(request: QueryRequest):
     chunks = get_all_chunks()
     if not chunks:
         raise HTTPException(status_code=400, detail="Upload a document before asking a question.")
-    query_vector = embed_query(request.question)\n    results = retrieve(request.question, chunks, request.top_k, query_embedding=query_vector)
+    query_vector = embed_query(request.question)
+    results = retrieve(request.question, chunks, request.top_k, query_embedding=query_vector)
     diagnostic = diagnose(request.question, results)
     sources = [
         {"label": f"S{index}", "chunk_id": item["chunk_id"], "document_id": item["document_id"],
@@ -120,7 +123,8 @@ def evaluate(request: EvaluationRequest):
         raise HTTPException(status_code=400, detail="Upload a document before running evaluation.")
     results = retrieve(request.question, chunks, request.top_k)
     return {"evaluation": evaluate_retrieval(request.question, request.expected_answer, results),
-            "diagnostics": diagnose(request.question, results), "retrieved_chunks": results,\n            "retrieval_mode": results[0].get("retrieval_mode") if results else "none"}
+            "diagnostics": diagnose(request.question, results), "retrieved_chunks": results,
+            "retrieval_mode": results[0].get("retrieval_mode") if results else "none"}
 
 
 
