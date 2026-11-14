@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pypdf import PdfReader
 
 from .database import get_all_chunks, get_documents, get_connection, init_db, save_document
@@ -30,6 +30,7 @@ from .benchmark_reports import build_benchmark_report, build_benchmark_insights,
 from .benchmark_failure_analytics import analyze_benchmark_failures
 from .incident_store import init_incident_store, save_incident, list_incidents, get_incident, incident_pattern_summary, incident_trace_analytics
 from .benchmark_snapshots import init_snapshot_store, create_snapshot, get_snapshot, SnapshotIntegrityError
+from .security import FixedWindowRateLimiter, valid_bearer_token
 
 app = FastAPI(
     title="RAG Failure Diagnostics API",
@@ -46,6 +47,12 @@ def configured_cors_origins() -> list[str]:
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper(), format="%(message)s")
 logger = logging.getLogger("rag_api")
+API_AUTH_TOKEN = os.getenv("API_AUTH_TOKEN", "").strip()
+API_RATE_LIMIT = int(os.getenv("API_RATE_LIMIT", "120"))
+API_RATE_WINDOW_SECONDS = int(os.getenv("API_RATE_WINDOW_SECONDS", "60"))
+api_rate_limiter = FixedWindowRateLimiter(API_RATE_LIMIT, API_RATE_WINDOW_SECONDS)
+if not API_AUTH_TOKEN:
+    logger.warning("API_AUTH_TOKEN is unset; API bearer authentication is disabled.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,6 +68,15 @@ app.add_middleware(
 async def request_observability(request: Request, call_next):
     request_id = str(uuid4())
     started = perf_counter()
+    if request.url.path.startswith("/api/"):
+        if not valid_bearer_token(request.headers.get("Authorization"), API_AUTH_TOKEN):
+            return JSONResponse(status_code=401, content={"detail": "A valid Bearer API token is required."},
+                                headers={"WWW-Authenticate": "Bearer", "X-Request-ID": request_id})
+        client_key = request.client.host if request.client else "unknown"
+        allowed, retry_after = api_rate_limiter.allow(client_key)
+        if not allowed:
+            return JSONResponse(status_code=429, content={"detail": "API rate limit exceeded. Retry later."},
+                                headers={"Retry-After": str(retry_after), "X-Request-ID": request_id})
     try:
         response = await call_next(request)
     except Exception:
