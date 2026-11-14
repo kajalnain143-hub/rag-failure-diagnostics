@@ -21,7 +21,10 @@ export default function App() {
     reference_answer: "Write the expected answer here.",
     k: 5
   }, null, 2));
-  const [benchmarkResult, setBenchmarkResult] = useState(null);\n  const [comparisonResult, setComparisonResult] = useState(null);
+  const [benchmarkResult, setBenchmarkResult] = useState(null);
+  const [traces, setTraces] = useState([]);
+  const [selectedTrace, setSelectedTrace] = useState(null);
+  const [comparisonResult, setComparisonResult] = useState(null);
   const [qualityResult, setQualityResult] = useState(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
