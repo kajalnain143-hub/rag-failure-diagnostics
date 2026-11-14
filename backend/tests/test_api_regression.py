@@ -350,3 +350,14 @@ def test_mmr_tuning_rejects_duplicate_diversity_values(monkeypatch):
         })
     assert response.status_code == 400
     assert "2–7 unique numbers" in response.json()["detail"]
+
+
+def test_database_backup_endpoint_returns_sqlite_attachment(monkeypatch):
+    monkeypatch.setattr(main, "create_database_backup", lambda: b"SQLite format 3\\x00backup")
+    with client(monkeypatch) as test_client:
+        response = test_client.get("/api/admin/database-backup")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/vnd.sqlite3"
+    assert "rag-diagnostics-backup.sqlite3" in response.headers["content-disposition"]
+    assert response.content.startswith(b"SQLite format 3")
+    assert response.headers["cache-control"] == "no-store"
