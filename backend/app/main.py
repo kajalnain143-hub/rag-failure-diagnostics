@@ -14,7 +14,7 @@ from .incident_schemas import IncidentDiagnosisRequest
 from .rag_engine import retrieve, split_into_chunks
 from .schemas import EvaluationRequest, QueryRequest
 from .experiment_store import init_experiment_store, list_experiments, save_experiment
-from .evaluation_metrics import aggregate_metrics, evaluate_case
+from .evaluation_metrics import aggregate_metrics, evaluate_case\nfrom .answer_quality import context_precision_recall, evaluate_answer_grounding
 
 app = FastAPI(
     title="RAG Failure Diagnostics API",
@@ -247,4 +247,37 @@ def compare_retrieval_strategies(payload: dict):
             "metric_note": summary.get("metric_note", "Metrics are computed against manually labeled chunk IDs."),
         }
     except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+
+@app.post("/api/quality/evaluate")
+def evaluate_answer_quality(payload: dict):
+    """Evaluate answer faithfulness against retrieved chunks and optional gold labels."""
+    required = ("question", "answer", "retrieved_chunk_ids")
+    if any(key not in payload for key in required):
+        raise HTTPException(status_code=400, detail=f"Required fields: {', '.join(required)}")
+    chunk_ids = payload["retrieved_chunk_ids"]
+    relevant_ids = payload.get("relevant_chunk_ids", [])
+    if not isinstance(chunk_ids, list) or not isinstance(relevant_ids, list):
+        raise HTTPException(status_code=400, detail="Chunk ID fields must be arrays.")
+    all_chunks = get_all_chunks()
+    by_id = {item["id"]: item for item in all_chunks}
+    missing = [chunk_id for chunk_id in chunk_ids if chunk_id not in by_id]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Unknown retrieved chunk IDs: {missing}")
+    contexts = [by_id[chunk_id] for chunk_id in chunk_ids]
+    try:
+        grounding = evaluate_answer_grounding(
+            str(payload["question"]), str(payload["answer"]), contexts
+        )
+        result = {"grounding": grounding}
+        if "relevant_chunk_ids" in payload:
+            result["context_metrics"] = context_precision_recall(chunk_ids, relevant_ids)
+        return result
+    except LLMNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail="Gemini API key is required for faithfulness judging.") from exc
+    except LLMGenerationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
