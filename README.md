@@ -141,6 +141,8 @@ The expected-answer coverage score measures lexical term overlap between the ref
 - [x] MMR reranking and retrieval strategy comparison
 - [x] Model-assisted faithfulness evaluation and labeled retrieval benchmark tooling
 - [x] Persistent experiment runs and comparison dashboard
+- [x] Batch dataset benchmarking with latency summaries
+- [x] Benchmark regression gates for comparable saved runs
 - [ ] PostgreSQL + pgvector storage option
 - [x] Docker and CI workflow configuration (execution still pending verification)\n- [ ] Deployment and public demo
 
