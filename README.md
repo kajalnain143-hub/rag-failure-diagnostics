@@ -6,7 +6,7 @@ A full-stack RAG workbench focused on diagnosing retrieval and answer-generation
 
 - Upload PDF, TXT, and Markdown files (10 MB limit)
 - Extract text, split it into overlapping chunks, and persist chunks in SQLite
-- Retrieve evidence using TF-IDF and cosine similarity
+- Retrieve evidence using hybrid TF-IDF + Gemini semantic embeddings, with a TF-IDF-only fallback when embeddings are unavailable
 - Diagnose no-context, weak-retrieval, and retrieval-candidate states
 - Generate grounded answers with Gemini 2.5 Flash
 - Instruct Gemini to cite source labels such as [S1] and abstain when evidence is insufficient
@@ -33,7 +33,7 @@ A full-stack RAG workbench focused on diagnosing retrieval and answer-generation
 
 - Backend: Python, FastAPI, Pydantic
 - LLM: Google Gemini Developer API via google-genai
-- Retrieval baseline: scikit-learn TF-IDF + cosine similarity
+- Retrieval: scikit-learn TF-IDF + Gemini Embedding (`gemini-embedding-001`) cosine similarity\n- Hybrid rank: weighted lexical/semantic score (45% / 55%) when dense vectors are available; transparent TF-IDF fallback otherwise
 - Storage: SQLite
 - Frontend: React + Vite
 - Tests: pytest
@@ -90,7 +90,7 @@ From backend with the virtual environment active:
 | GET | /api/documents | List indexed documents |
 | POST | /api/documents/upload | Upload and index a document |
 | POST | /api/query | Retrieve, diagnose, and optionally generate a Gemini answer |
-| POST | /api/evaluate | Compare retrieved context with a reference answer |
+| POST | /api/evaluate | Compare retrieved context with a reference answer |\n| GET | /api/diagnostics/patterns | List supported P01–P12 failure patterns |\n| POST | /api/diagnostics/incident | Diagnose a reported RAG/LLM incident with Gemini |
 | GET | /api/diagnostics/patterns | List supported P01–P12 failure patterns |
 | POST | /api/diagnostics/incident | Diagnose a reported RAG/LLM incident with Gemini |
 
@@ -127,3 +127,28 @@ The expected-answer coverage score measures lexical term overlap between the ref
 ## Project status
 
 **Active development — Phase 1 committed.** Repository changes have not yet been run in your Windows environment or against a live Gemini API key. Test results, live API behavior, and deployment will be reported only after verification.
+
+
+## Docker
+
+1. Create `backend/.env` from `backend/.env.example` and set your Gemini key.
+2. From the repository root run:
+
+    docker compose up --build
+
+3. Open the frontend at http://localhost:5173 and API docs at http://localhost:8000/docs.
+
+The SQLite database is stored in a named Docker volume. Do not commit `backend/.env`.
+
+## Retrieval behavior
+
+Newly uploaded chunks are embedded using Gemini Embedding. Query text is embedded with the retrieval-query task type. When both query and stored vectors are available, the ranker combines lexical TF-IDF similarity (45%) and semantic cosine similarity (55%). If the embedding key is absent, quota is exhausted, or the embedding endpoint fails, retrieval explicitly falls back to TF-IDF. Existing documents uploaded before embedding support will continue to work through this fallback; re-upload them to generate vectors.
+
+The current ranking is a baseline hybrid ranker, not a learned reranker. Scores are useful for ranking and diagnostics, not calibrated probabilities.
+
+## Current limitations
+
+- Embedding generation currently makes one API call per chunk; very large uploads may hit free-tier rate limits.
+- The incident diagnosis is LLM-assisted hypothesis generation, not verified root-cause analysis.
+- Reference-answer coverage remains lexical; a curated benchmark and faithfulness evaluation are still required.
+- Docker and CI configuration are committed but must pass local/remote builds before being described as verified.
