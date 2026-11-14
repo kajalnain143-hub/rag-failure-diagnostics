@@ -25,6 +25,13 @@ export default function App() {
   const [traces, setTraces] = useState([]);
   const [selectedTrace, setSelectedTrace] = useState(null);
   const [comparisonResult, setComparisonResult] = useState(null);
+  const [batchDataset, setBatchDataset] = useState(JSON.stringify({
+    dataset_name: "my-rag-regression-suite",
+    strategies: ["tfidf", "hybrid", "hybrid_mmr"],
+    mmr_diversity: 0.35,
+    cases: [{ query_id: "q1", question: "Ask a question about your indexed documents", relevant_chunk_ids: [1], reference_answer: "Replace with the expected answer", k: 5 }]
+  }, null, 2));
+  const [batchResult, setBatchResult] = useState(null);
   const [qualityResult, setQualityResult] = useState(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -215,6 +222,34 @@ export default function App() {
       ));
       await loadExperiments();
       setMessage(`Comparison complete. Best for this query: ${data.best_strategy}. All three runs saved.`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setDashboardBusy(false);
+    }
+  }
+
+  async function runBatchBenchmark(event) {
+    event.preventDefault();
+    let dataset;
+    try {
+      dataset = JSON.parse(batchDataset);
+    } catch {
+      setMessage("Batch dataset must be valid JSON.");
+      return;
+    }
+    setDashboardBusy(true);
+    setMessage("");
+    setBatchResult(null);
+    try {
+      const data = await apiRequest("/api/benchmark/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dataset)
+      });
+      setBatchResult(data);
+      await loadExperiments();
+      setMessage(`Batch benchmark complete: ${data.case_count} cases across ${Object.keys(data.strategies).length} strategies. Runs saved.`);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -434,6 +469,28 @@ export default function App() {
             </table></div>
             <p className="hint">{comparisonResult.selection_note} Results are valid only for this labeled query and current indexed corpus.</p>
           </div>}
+          <div className="subsection">
+            <div className="eyebrow">BATCH REGRESSION BENCHMARK</div>
+            <h3>Evaluate a dataset across retrieval strategies</h3>
+            <p className="hint">Run 1–100 labeled questions in one request. Use real integer chunk IDs from the currently indexed corpus. Aggregate timing is an in-process measurement, not a load test.</p>
+            <form onSubmit={runBatchBenchmark}>
+              <textarea className="code-input" value={batchDataset} onChange={e => setBatchDataset(e.target.value)} rows="12" spellCheck="false" />
+              <button disabled={dashboardBusy}>{dashboardBusy ? "Running dataset..." : "Run batch benchmark"}</button>
+            </form>
+            {batchResult && <>
+              <p className="hint">{batchResult.dataset_name} · {batchResult.case_count} labeled cases</p>
+              {Object.entries(batchResult.strategies).map(([strategy, row]) => <div className="results" key={strategy}>
+                <h3>{strategy.replaceAll("_", " ")}</h3>
+                <div className="metric-grid">
+                  {["recall_at_k", "mrr", "ndcg_at_k", "evidence_term_coverage", "latency_avg_ms", "latency_p50_ms", "latency_p95_ms"].map(key =>
+                    <div className="metric-card" key={key}><strong>{Number(row.metrics[key] || 0).toFixed(3)}</strong><span>{key.replaceAll("_", " ")}</span></div>
+                  )}
+                </div>
+                <p className="hint">Experiment #{row.experiment_id}</p>
+              </div>)}
+              <p className="hint">{batchResult.metric_note}</p>
+            </>}
+          </div>
           <p className="hint">Ranking metrics require manually labeled relevant chunks. Evidence-term coverage is lexical—not a semantic faithfulness score.</p>
         </div>
       </section>
