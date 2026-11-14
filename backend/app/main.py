@@ -27,6 +27,7 @@ from .trace_store import init_trace_store, save_trace, list_traces, get_trace
 from .benchmark_runner import ALLOWED_STRATEGIES, run_dataset
 from .benchmark_regression import compare_benchmark_runs
 from .benchmark_reports import build_benchmark_report, build_benchmark_insights, REPORT_METRICS
+from .benchmark_failure_analytics import analyze_benchmark_failures
 from .benchmark_snapshots import init_snapshot_store, create_snapshot, get_snapshot, SnapshotIntegrityError
 
 app = FastAPI(
@@ -483,6 +484,13 @@ def benchmark_insights(dataset_name: str):
     if not dataset_name.strip() or len(dataset_name) > 120:
         raise HTTPException(status_code=400, detail="dataset_name must contain 1–120 characters.")
     return build_benchmark_insights(list_experiments(100), dataset_name)
+
+
+@app.get("/api/benchmark/failure-analytics")
+def benchmark_failure_analytics(dataset_name: str):
+    if not dataset_name.strip() or len(dataset_name) > 120:
+        raise HTTPException(status_code=400, detail="dataset_name must contain 1–120 characters.")
+    return analyze_benchmark_failures(list_experiments(100), dataset_name)
 
 
 @app.get("/api/benchmark/report.csv")
