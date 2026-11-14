@@ -56,3 +56,19 @@ The benchmark does not create an isolated corpus snapshot; re-running after
 changing indexed documents may produce different results. Compare runs only when
 the corpus and labels are held constant. Timing is an in-process measurement,
 not a production load test or provider-cost estimate.
+
+
+## Benchmark regression gates
+
+Use `POST /api/benchmark/regression` with `baseline_run_id`,
+`current_run_id`, and optional `max_metric_drop` (default 0.05). The endpoint
+compares Recall@K, MRR, nDCG@K, and lexical evidence-term coverage. It returns
+`passed` or `regression`, per-metric deltas, and the metrics that exceeded the
+allowed absolute drop.
+
+Only saved batch runs with the same dataset name, strategy, and case count are
+comparable. Keep the indexed corpus and relevance labels unchanged as well; the
+API cannot independently verify corpus identity. This is a quality regression
+gate, not a claim that the benchmark labels are correct or that semantic answer
+faithfulness has been proven. The endpoint looks up runs among the latest 100
+saved experiments.
