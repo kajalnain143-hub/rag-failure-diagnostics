@@ -27,6 +27,7 @@ from .trace_store import init_trace_store, save_trace, list_traces, get_trace
 from .benchmark_runner import ALLOWED_STRATEGIES, run_dataset
 from .benchmark_regression import compare_benchmark_runs
 from .benchmark_reports import build_benchmark_report, REPORT_METRICS
+from .benchmark_snapshots import init_snapshot_store, create_snapshot, get_snapshot
 
 app = FastAPI(
     title="RAG Failure Diagnostics API",
@@ -85,6 +86,7 @@ def startup():
     init_db()
     init_experiment_store()
     init_trace_store()
+    init_snapshot_store()
 
 
 def extract_text(filename: str, content: bytes) -> str:
@@ -396,8 +398,9 @@ def run_batch_benchmark(payload: dict):
     if not chunks:
         raise HTTPException(status_code=400, detail="Upload documents before running a batch benchmark.")
     try:
+        snapshot = create_snapshot(dataset_name, clean_cases, chunks, float(diversity))
         return run_dataset(dataset_name, clean_cases, strategies, chunks,
-                           embed_query, retrieve, save_experiment, float(diversity))
+                           embed_query, retrieve, save_experiment, float(diversity), snapshot)
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -421,6 +424,37 @@ def benchmark_regression_check(payload: dict):
     try:
         return compare_benchmark_runs(runs[baseline_id], runs[current_id], float(tolerance))
     except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/benchmark/snapshots/{snapshot_id}")
+def read_benchmark_snapshot(snapshot_id: int):
+    snapshot = get_snapshot(snapshot_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Benchmark snapshot not found.")
+    return snapshot
+
+
+@app.post("/api/benchmark/snapshots/{snapshot_id}/replay")
+def replay_benchmark_snapshot(snapshot_id: int, payload: dict):
+    snapshot = get_snapshot(snapshot_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Benchmark snapshot not found.")
+    strategies = payload.get("strategies", ["tfidf", "hybrid", "hybrid_mmr"])
+    if (not isinstance(strategies, list) or not strategies
+            or any(not isinstance(item, str) for item in strategies)
+            or len(set(strategies)) != len(strategies)
+            or any(item not in ALLOWED_STRATEGIES for item in strategies)):
+        raise HTTPException(status_code=400, detail=f"strategies must be unique values from: {', '.join(sorted(ALLOWED_STRATEGIES))}.")
+    try:
+        return run_dataset(snapshot["dataset_name"], snapshot["cases"], strategies,
+                           snapshot["chunks"], embed_query, retrieve, save_experiment,
+                           snapshot["mmr_diversity"], {
+                               "snapshot_id": snapshot_id,
+                               "corpus_fingerprint": snapshot["corpus_fingerprint"],
+                               "dataset_fingerprint": snapshot["dataset_fingerprint"],
+                           })
+    except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
