@@ -23,8 +23,12 @@ def init_incident_store() -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        if not column_exists("incident_reports", "trace_id"):
-            conn.execute("ALTER TABLE incident_reports ADD COLUMN trace_id TEXT")
+        conn.commit()
+    if not column_exists("incident_reports", "trace_id"):
+        with get_connection() as migration_conn:
+            migration_conn.execute("ALTER TABLE incident_reports ADD COLUMN trace_id TEXT")
+            migration_conn.commit()
+    with get_connection() as conn:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_incidents_trace ON incident_reports(trace_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_incidents_created ON incident_reports(created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_incidents_pattern ON incident_reports(primary_pattern_id)")
