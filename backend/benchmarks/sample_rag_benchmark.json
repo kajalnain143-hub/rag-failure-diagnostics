@@ -1,0 +1,23 @@
+[
+  {
+    "query_id": "policy-001",
+    "question": "What is the refund window?",
+    "relevant_chunk_ids": [101],
+    "reference_answer": "Customers can request a refund within 30 days of purchase.",
+    "k": 5
+  },
+  {
+    "query_id": "security-001",
+    "question": "How should API keys be stored?",
+    "relevant_chunk_ids": [205],
+    "reference_answer": "API keys must be stored in environment variables or a secrets manager and must never be committed to source control.",
+    "k": 5
+  },
+  {
+    "query_id": "rag-001",
+    "question": "What is retrieval augmented generation?",
+    "relevant_chunk_ids": [309],
+    "reference_answer": "Retrieval augmented generation retrieves relevant external context and supplies it to a language model to ground its response.",
+    "k": 5
+  }
+]
