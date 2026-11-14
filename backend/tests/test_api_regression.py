@@ -9,6 +9,7 @@ def client(monkeypatch):
     monkeypatch.setattr(main, "init_db", lambda: None)
     monkeypatch.setattr(main, "init_experiment_store", lambda: None)
     monkeypatch.setattr(main, "init_trace_store", lambda: None)
+    monkeypatch.setattr(main, "init_snapshot_store", lambda: None)
     return TestClient(main.app)
 
 
@@ -215,3 +216,73 @@ def test_benchmark_report_csv_download(monkeypatch):
     assert response.status_code == 200
     assert "text/csv" in response.headers["content-type"]
     assert "recall_at_k" in response.text
+
+
+def test_batch_benchmark_creates_snapshot_and_returns_fingerprints(monkeypatch):
+    chunks = [{"id": 11, "document_id": 3, "filename": "notes.txt",
+               "content": "Python is a programming language.", "embedding_json": None}]
+    monkeypatch.setattr(main, "get_all_chunks", lambda: chunks)
+    monkeypatch.setattr(main, "embed_query", lambda question: [0.1, 0.2])
+    monkeypatch.setattr(main, "retrieve", lambda question, stored, k, **kwargs:
+                        [{"chunk_id": 11, "content": stored[0]["content"]}])
+    captured = []
+    def fake_snapshot(name, cases, corpus, diversity):
+        captured.append(corpus)
+        return {"snapshot_id": 77, "corpus_fingerprint": "corpus-hash",
+                "dataset_fingerprint": "dataset-hash"}
+    monkeypatch.setattr(main, "create_snapshot", fake_snapshot)
+    monkeypatch.setattr(main, "save_experiment", lambda *args: 88)
+    payload = {"dataset_name": "snap-suite", "cases": [
+        {"query_id": "q1", "question": "What is Python?", "relevant_chunk_ids": [11],
+         "reference_answer": "Python language", "k": 2}], "strategies": ["tfidf"]}
+    with client(monkeypatch) as test_client:
+        response = test_client.post("/api/benchmark/run", json=payload)
+    assert response.status_code == 200
+    assert response.json()["snapshot_id"] == 77
+    assert response.json()["corpus_fingerprint"] == "corpus-hash"
+    assert captured[0] == chunks
+
+
+def test_regression_rejects_different_corpus_fingerprints(monkeypatch):
+    config = {"dataset_name": "suite", "strategy": "hybrid", "case_count": 2,
+              "dataset_fingerprint": "same-dataset"}
+    metrics = {"recall_at_k": 0.9, "mrr": 0.8, "ndcg_at_k": 0.85, "evidence_term_coverage": 0.7}
+    runs = [{"id": 10, "config": {**config, "corpus_fingerprint": "old"}, "metrics": metrics},
+            {"id": 11, "config": {**config, "corpus_fingerprint": "new"}, "metrics": metrics}]
+    monkeypatch.setattr(main, "list_experiments", lambda limit: runs)
+    with client(monkeypatch) as test_client:
+        response = test_client.post("/api/benchmark/regression", json={
+            "baseline_run_id": 10, "current_run_id": 11})
+    assert response.status_code == 400
+    assert "corpus_fingerprint" in response.json()["detail"]
+
+
+def test_snapshot_endpoint_returns_saved_inputs(monkeypatch):
+    monkeypatch.setattr(main, "get_snapshot", lambda snapshot_id: {
+        "snapshot_id": snapshot_id, "dataset_name": "suite", "cases": [{"query_id": "q1"}],
+        "chunks": [{"id": 1, "content": "Saved evidence"}], "corpus_fingerprint": "abc",
+        "dataset_fingerprint": "xyz", "mmr_diversity": 0.35})
+    with client(monkeypatch) as test_client:
+        response = test_client.get("/api/benchmark/snapshots/5")
+    assert response.status_code == 200
+    assert response.json()["chunks"][0]["content"] == "Saved evidence"
+
+
+def test_snapshot_replay_uses_snapshot_chunks_not_live_corpus(monkeypatch):
+    snapshot = {"snapshot_id": 5, "dataset_name": "suite",
+                "cases": [{"query_id": "q1", "question": "Q", "relevant_chunk_ids": [1],
+                           "reference_answer": "Answer", "k": 1}],
+                "chunks": [{"id": 1, "content": "Snapshot evidence"}],
+                "corpus_fingerprint": "abc", "dataset_fingerprint": "xyz", "mmr_diversity": 0.35}
+    monkeypatch.setattr(main, "get_snapshot", lambda snapshot_id: snapshot)
+    monkeypatch.setattr(main, "embed_query", lambda question: None)
+    seen = []
+    monkeypatch.setattr(main, "retrieve", lambda question, chunks, k, **kwargs:
+                        seen.append(chunks) or [{"chunk_id": 1, "content": chunks[0]["content"]}])
+    monkeypatch.setattr(main, "save_experiment", lambda *args: 99)
+    monkeypatch.setattr(main, "get_all_chunks", lambda: (_ for _ in ()).throw(AssertionError("live corpus used")))
+    with client(monkeypatch) as test_client:
+        response = test_client.post("/api/benchmark/snapshots/5/replay", json={"strategies": ["tfidf"]})
+    assert response.status_code == 200
+    assert seen[0][0]["content"] == "Snapshot evidence"
+    assert response.json()["snapshot_id"] == 5
