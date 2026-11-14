@@ -144,6 +144,8 @@ The expected-answer coverage score measures lexical term overlap between the ref
 - [x] Batch dataset benchmarking with latency summaries
 - [x] Benchmark regression gates for comparable saved runs
 - [x] Historical benchmark reports with CSV export
+- [x] Immutable benchmark snapshots and SHA-256 corpus/dataset fingerprints
+- [x] Snapshot replay independent of the live indexed corpus
 - [x] Batch dataset benchmarking with latency summaries
 - [x] Benchmark regression gates for comparable saved runs
 - [ ] PostgreSQL + pgvector storage option
