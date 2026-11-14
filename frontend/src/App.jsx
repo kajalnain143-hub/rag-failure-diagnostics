@@ -13,6 +13,10 @@ export default function App() {
   const [incidentLogs, setIncidentLogs] = useState("");
   const [expectedBehavior, setExpectedBehavior] = useState("");
   const [incidentResult, setIncidentResult] = useState(null);
+  const [incidentHistory, setIncidentHistory] = useState([]);
+  const [incidentSummary, setIncidentSummary] = useState({ total_incidents: 0, patterns: [], severity: {} });
+  const [incidentPatternFilter, setIncidentPatternFilter] = useState("");
+  const [incidentSeverityFilter, setIncidentSeverityFilter] = useState("");
   const [experiments, setExperiments] = useState([]);
   const [benchmarkCase, setBenchmarkCase] = useState(JSON.stringify({
     query_id: "my-query-001",
@@ -85,6 +89,7 @@ export default function App() {
     loadDocuments();
     loadExperiments().catch(() => {});
     loadTraces().catch(() => {});
+    loadIncidentHistory().catch(() => {});
   }, []);
 
   async function uploadDocument(event) {
@@ -420,6 +425,16 @@ export default function App() {
     }
   }
 
+  async function loadIncidentHistory() {
+    const params = new URLSearchParams();
+    if (incidentPatternFilter) params.set("pattern_id", incidentPatternFilter);
+    if (incidentSeverityFilter) params.set("severity", incidentSeverityFilter);
+    params.set("limit", "100");
+    const data = await apiRequest(`/api/diagnostics/incidents?${params.toString()}`);
+    setIncidentHistory(data.incidents || []);
+    setIncidentSummary(data.summary || { total_incidents: 0, patterns: [], severity: {} });
+  }
+
   async function runIncidentDiagnosis(event) {
     event.preventDefault();
     if (incident.trim().length < 10) {
@@ -436,6 +451,8 @@ export default function App() {
         body: JSON.stringify({ description: incident, logs: incidentLogs, expected_behavior: expectedBehavior })
       });
       setIncidentResult(data.diagnosis);
+      await loadIncidentHistory();
+      setMessage(`Diagnosis saved to incident history · ${data.incident_id.slice(0, 8)}`);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -510,7 +527,36 @@ export default function App() {
           <h3>Verification steps</h3>{incidentResult.verification_steps?.map((item, i) => <p className="recommendation" key={i}>✓ {item}</p>)}
           <p className="hint">{incidentResult.disclaimer}</p>
         </div>}
-      </section>
+      <div className="subsection">
+          <div className="eyebrow">PERSISTENT INCIDENT INTELLIGENCE</div>
+          <h3>Incident history & pattern trends</h3>
+          <div className="metric-grid">
+            <div className="metric-card"><strong>{incidentSummary.total_incidents}</strong><span>Total saved incidents</span></div>
+            {["critical", "high", "medium", "low"].map(level => <div className="metric-card" key={level}><strong>{incidentSummary.severity?.[level] || 0}</strong><span>{level} severity</span></div>)}
+          </div>
+          <div className="report-controls">
+            <label>Pattern<select value={incidentPatternFilter} onChange={e => setIncidentPatternFilter(e.target.value)}>
+              <option value="">All patterns</option>{Array.from({ length: 12 }, (_, index) => `P${String(index + 1).padStart(2, "0")}`).map(id => <option key={id} value={id}>{id}</option>)}
+            </select></label>
+            <label>Severity<select value={incidentSeverityFilter} onChange={e => setIncidentSeverityFilter(e.target.value)}>
+              <option value="">All severities</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+            </select></label>
+            <button className="secondary compact" onClick={() => loadIncidentHistory().catch(error => setMessage(error.message))}>Apply filters</button>
+            <a className="report-download" href={`${API}/api/diagnostics/incidents.csv${incidentPatternFilter || incidentSeverityFilter ? `?${new URLSearchParams({ ...(incidentPatternFilter ? { pattern_id: incidentPatternFilter } : {}), ...(incidentSeverityFilter ? { severity: incidentSeverityFilter } : {}) }).toString()}` : ""}`}>Export CSV</a>
+          </div>
+          {incidentHistory.length === 0 ? <div className="empty-state">No saved incidents match these filters.</div> :
+            <div className="table-wrap"><table className="experiment-table">
+              <thead><tr><th>Incident</th><th>Pattern</th><th>Severity</th><th>Confidence</th><th>Created</th></tr></thead>
+              <tbody>{incidentHistory.map(item => <tr key={item.incident_id}>
+                <td><b>{item.description.slice(0, 100)}</b><small>{item.incident_id}</small></td>
+                <td>{item.primary_pattern_id}<small>{item.secondary_pattern_ids.join(", ")}</small></td>
+                <td>{item.severity}</td><td>{(item.confidence * 100).toFixed(0)}%</td><td>{item.created_at}</td>
+              </tr>)}</tbody>
+            </table></div>}
+          <p className="hint">Pattern counts are based on saved primary diagnoses. LLM confidence is a model estimate, not a calibrated probability.</p>
+        </div>
+
+</section>
 
       <section className="panel" id="evaluation">
         <div className="section-heading"><div><div className="eyebrow">04 / EVALUATION LAB</div><h2>Baseline evaluation</h2></div><span className="count">Auto-save enabled</span></div>
