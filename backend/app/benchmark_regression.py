@@ -11,6 +11,9 @@ def compare_benchmark_runs(baseline: dict, current: dict, max_metric_drop: float
     for key in ("dataset_name", "strategy", "case_count"):
         if baseline_config.get(key) != current_config.get(key):
             raise ValueError(f"Runs are not comparable: config field '{key}' differs.")
+    for key in ("corpus_fingerprint", "dataset_fingerprint"):
+        if baseline_config.get(key) != current_config.get(key):
+            raise ValueError(f"Runs are not comparable: {key} differs or is missing.")
     baseline_metrics = baseline.get("metrics", {})
     current_metrics = current.get("metrics", {})
     comparisons = {}
@@ -40,5 +43,7 @@ def compare_benchmark_runs(baseline: dict, current: dict, max_metric_drop: float
         "max_metric_drop": max_metric_drop,
         "regressed_metrics": regressions,
         "comparisons": comparisons,
-        "note": "A metric is flagged only when its absolute drop is greater than the configured tolerance. This check assumes identical dataset labels and corpus.",
+        "corpus_fingerprint": baseline_config["corpus_fingerprint"],
+        "dataset_fingerprint": baseline_config["dataset_fingerprint"],
+        "note": "A metric is flagged only when its absolute drop is greater than the configured tolerance. Matching fingerprints verify the stored corpus and labeled cases.",
     }
