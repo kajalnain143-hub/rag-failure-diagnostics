@@ -151,3 +151,32 @@ def test_batch_benchmark_rejects_non_integer_k(monkeypatch):
         response = test_client.post("/api/benchmark/run", json=payload)
     assert response.status_code == 400
     assert "k must be an integer" in response.json()["detail"]
+
+
+def test_benchmark_regression_endpoint_compares_saved_runs(monkeypatch):
+    baseline = {"id": 10, "config": {"dataset_name": "suite", "strategy": "hybrid", "case_count": 2},
+                "metrics": {"recall_at_k": 0.9, "mrr": 0.8, "ndcg_at_k": 0.85, "evidence_term_coverage": 0.7}}
+    current = {"id": 11, "config": {"dataset_name": "suite", "strategy": "hybrid", "case_count": 2},
+               "metrics": {"recall_at_k": 0.7, "mrr": 0.8, "ndcg_at_k": 0.85, "evidence_term_coverage": 0.7}}
+    monkeypatch.setattr(main, "list_experiments", lambda limit: [current, baseline])
+    with client(monkeypatch) as test_client:
+        response = test_client.post("/api/benchmark/regression", json={
+            "baseline_run_id": 10, "current_run_id": 11, "max_metric_drop": 0.05})
+    assert response.status_code == 200
+    assert response.json()["status"] == "regression"
+    assert response.json()["regressed_metrics"] == ["recall_at_k"]
+
+
+def test_benchmark_regression_rejects_unmatched_runs(monkeypatch):
+    runs = [
+        {"id": 10, "config": {"dataset_name": "suite-a", "strategy": "hybrid", "case_count": 2},
+         "metrics": {"recall_at_k": 0.9, "mrr": 0.8, "ndcg_at_k": 0.85, "evidence_term_coverage": 0.7}},
+        {"id": 11, "config": {"dataset_name": "suite-b", "strategy": "hybrid", "case_count": 2},
+         "metrics": {"recall_at_k": 0.8, "mrr": 0.8, "ndcg_at_k": 0.85, "evidence_term_coverage": 0.7}},
+    ]
+    monkeypatch.setattr(main, "list_experiments", lambda limit: runs)
+    with client(monkeypatch) as test_client:
+        response = test_client.post("/api/benchmark/regression", json={
+            "baseline_run_id": 10, "current_run_id": 11})
+    assert response.status_code == 400
+    assert "not comparable" in response.json()["detail"]
