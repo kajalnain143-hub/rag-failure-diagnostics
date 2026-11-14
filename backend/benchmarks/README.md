@@ -12,3 +12,16 @@ scores. Each case contains:
 
 The deterministic evaluator reports Recall@K, MRR, nDCG@K, and lexical evidence-term
 coverage. It does not claim semantic correctness or answer faithfulness.
+
+## Retrieval strategy comparison
+
+The API also exposes `POST /api/benchmark/compare`. Submit the same labeled case
+to compare `tfidf`, `hybrid`, and `hybrid_mmr` on the currently indexed corpus.
+The response includes per-strategy rankings and metrics plus a best-for-this-query
+indicator (nDCG@K, then MRR, then Recall@K). This is a per-query result, not a
+global claim about which retriever is universally best.
+
+MMR uses cosine similarity between stored embeddings when all indexed chunks have
+compatible vectors. If embeddings are unavailable, it falls back to TF-IDF chunk
+similarity, so the comparison remains usable without a Gemini API key. The default
+diversity weight is 0.35; larger values penalize redundancy more strongly.
