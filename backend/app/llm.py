@@ -71,3 +71,43 @@ def generate_grounded_answer(question: str, chunks: list[dict]) -> str:
         raise LLMGenerationError(
             "Gemini generation failed. Check API quota, model access, and server logs."
         ) from exc
+
+
+def verify_live_api() -> dict:
+    """Perform one small live Gemini generation and embedding check without exposing credentials."""
+    if not os.getenv("GEMINI_API_KEY", "").strip():
+        return {"status": "not_configured", "model": MODEL_NAME, "embedding_status": "not_checked"}
+    generation_status = "failed"
+    embedding_status = "failed"
+    try:
+        response = _client().models.generate_content(
+            model=MODEL_NAME,
+            contents="Reply with exactly: OK",
+            config=types.GenerateContentConfig(temperature=0, max_output_tokens=4),
+        )
+        generation_status = "passed" if (response.text or "").strip() else "empty_response"
+    except Exception as exc:
+        generation_status = "failed"
+        generation_error = type(exc).__name__
+    try:
+        embedding = _client().models.embed_content(
+            model=os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001"),
+            contents="Gemini live API connectivity check",
+            config={"task_type": "RETRIEVAL_QUERY", "output_dimensionality": 768},
+        )
+        embedding_status = "passed" if embedding.embeddings and embedding.embeddings[0].values else "empty_response"
+    except Exception as exc:
+        embedding_status = "failed"
+        embedding_error = type(exc).__name__
+    result = {
+        "status": "passed" if generation_status == "passed" and embedding_status == "passed" else "failed",
+        "model": MODEL_NAME,
+        "generation_status": generation_status,
+        "embedding_model": os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001"),
+        "embedding_status": embedding_status,
+    }
+    if generation_status == "failed":
+        result["generation_error_type"] = generation_error
+    if embedding_status == "failed":
+        result["embedding_error_type"] = embedding_error
+    return result
