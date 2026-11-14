@@ -32,6 +32,9 @@ export default function App() {
     cases: [{ query_id: "q1", question: "Ask a question about your indexed documents", relevant_chunk_ids: [1], reference_answer: "Replace with the expected answer", k: 5 }]
   }, null, 2));
   const [batchResult, setBatchResult] = useState(null);
+  const [baselineRunId, setBaselineRunId] = useState("");
+  const [currentRunId, setCurrentRunId] = useState("");
+  const [regressionResult, setRegressionResult] = useState(null);
   const [qualityResult, setQualityResult] = useState(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -250,6 +253,30 @@ export default function App() {
       setBatchResult(data);
       await loadExperiments();
       setMessage(`Batch benchmark complete: ${data.case_count} cases across ${Object.keys(data.strategies).length} strategies. Runs saved.`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setDashboardBusy(false);
+    }
+  }
+
+  async function checkBenchmarkRegression(event) {
+    event.preventDefault();
+    setDashboardBusy(true);
+    setMessage("");
+    setRegressionResult(null);
+    try {
+      const data = await apiRequest("/api/benchmark/regression", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseline_run_id: Number(baselineRunId),
+          current_run_id: Number(currentRunId),
+          max_metric_drop: 0.05
+        })
+      });
+      setRegressionResult(data);
+      setMessage(data.status === "regression" ? "Regression detected. Review the metrics below." : "No quality regression detected within the configured tolerance.");
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -503,6 +530,33 @@ export default function App() {
           {metricCards.map(([label, value]) => <div className="metric-card" key={label}><strong>{typeof value === "number" ? value.toFixed(3) : "—"}</strong><span>Latest · {label}</span></div>)}
         </div>
         <p className="hint">Latest metrics are taken from the most recent saved run. A dash means that metric was not part of that run.</p>
+        <div className="subsection">
+          <div className="eyebrow">AUTOMATED QUALITY GATE</div>
+          <h3>Baseline vs current benchmark</h3>
+          <p className="hint">Compare two saved batch runs from the same dataset, strategy and case count. A quality metric is flagged when it drops by more than 0.05 (5 percentage points).</p>
+          <form onSubmit={checkBenchmarkRegression}>
+            <div className="regression-inputs">
+              <label>Baseline experiment ID<input type="number" min="1" value={baselineRunId} onChange={e => setBaselineRunId(e.target.value)} placeholder="e.g. 12" required /></label>
+              <label>Current experiment ID<input type="number" min="1" value={currentRunId} onChange={e => setCurrentRunId(e.target.value)} placeholder="e.g. 15" required /></label>
+            </div>
+            <button disabled={dashboardBusy || !baselineRunId || !currentRunId}>{dashboardBusy ? "Checking..." : "Check for regression"}</button>
+          </form>
+          {regressionResult && <div className="results">
+            <div className="diagnostic">
+              <div><div className="eyebrow">REGRESSION GATE</div><strong>{regressionResult.status === "passed" ? "No regression detected" : "Quality regression detected"}</strong></div>
+              <div className="score">{regressionResult.status === "passed" ? "PASS" : "FAIL"}<small>{regressionResult.strategy} · {regressionResult.dataset_name}</small></div>
+            </div>
+            <div className="table-wrap"><table className="experiment-table">
+              <thead><tr><th>Metric</th><th>Baseline</th><th>Current</th><th>Delta</th><th>Gate</th></tr></thead>
+              <tbody>{Object.entries(regressionResult.comparisons).map(([metric, row]) => <tr key={metric}>
+                <td>{metric.replaceAll("_", " ")}</td><td>{row.baseline.toFixed(3)}</td><td>{row.current.toFixed(3)}</td>
+                <td>{row.delta > 0 ? "+" : ""}{row.delta.toFixed(3)}</td><td>{row.regression ? "REGRESSION" : "PASS"}</td>
+              </tr>)}</tbody>
+            </table></div>
+            <p className="hint">{regressionResult.note}</p>
+          </div>}
+        </div>
+
         {experiments.length === 0 ? <div className="empty-state">No experiments saved yet. Run a baseline evaluation or labeled benchmark to create your first run.</div> :
           <div className="table-wrap"><table className="experiment-table"><thead><tr><th>Run</th><th>Configuration</th><th>Metrics</th><th>Created</th></tr></thead><tbody>
             {experiments.map(run => <tr key={run.id}><td><b>#{run.id} · {run.name}</b>{run.notes && <small>{run.notes}</small>}</td><td><code>{JSON.stringify(run.config)}</code></td><td><code>{JSON.stringify(run.metrics)}</code></td><td>{run.created_at}</td></tr>)}
