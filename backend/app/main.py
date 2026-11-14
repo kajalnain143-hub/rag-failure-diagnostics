@@ -1,13 +1,16 @@
 from io import BytesIO
 from pathlib import Path
+import json
+import logging
+import os
 from time import perf_counter
 from uuid import uuid4
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pypdf import PdfReader
 
-from .database import get_all_chunks, get_documents, init_db, save_document
+from .database import get_all_chunks, get_documents, get_connection, init_db, save_document
 from .diagnostics import diagnose, evaluate_retrieval
 from .llm import LLMGenerationError, LLMNotConfiguredError, generate_grounded_answer
 from .embeddings import EMBEDDING_MODEL, embed_query, embed_text
@@ -25,13 +28,51 @@ app = FastAPI(
     description="A RAG workbench for grounded answers, retrieval diagnostics, and evaluation.",
     version="0.2.0",
 )
+def configured_cors_origins() -> list[str]:
+    raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+    origins = [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
+    if not origins or "*" in origins:
+        raise RuntimeError("CORS_ORIGINS must contain explicit trusted origins; wildcard origins are not allowed.")
+    return origins
+
+
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper(), format="%(message)s")
+logger = logging.getLogger("rag_api")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=configured_cors_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
 )
+
+
+@app.middleware("http")
+async def request_observability(request: Request, call_next):
+    request_id = str(uuid4())
+    started = perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed_ms = round((perf_counter() - started) * 1000, 2)
+        logger.exception(json.dumps({
+            "event": "http_request_failed", "request_id": request_id,
+            "method": request.method, "path": request.url.path, "duration_ms": elapsed_ms,
+        }))
+        raise
+    elapsed_ms = round((perf_counter() - started) * 1000, 2)
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-Frame-Options"] = "DENY"
+    logger.info(json.dumps({
+        "event": "http_request", "request_id": request_id,
+        "method": request.method, "path": request.url.path,
+        "status_code": response.status_code, "duration_ms": elapsed_ms,
+    }))
+    return response
 
 
 @app.on_event("startup")
@@ -68,7 +109,13 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "service": "rag-failure-diagnostics-api"}
+    try:
+        with get_connection() as conn:
+            conn.execute("SELECT 1")
+    except Exception as exc:
+        logger.exception("Database readiness check failed")
+        raise HTTPException(status_code=503, detail="Database is unavailable.") from exc
+    return {"status": "healthy", "database": "ready", "service": "rag-failure-diagnostics-api"}
 
 
 @app.get("/api/documents")
