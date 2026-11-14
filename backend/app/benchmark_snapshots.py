@@ -1,10 +1,8 @@
 """Immutable corpus and labeled dataset snapshots for reproducible benchmarks."""
 from __future__ import annotations
-
 import hashlib
 import json
-
-from .database import get_connection
+from .database import get_connection, USING_POSTGRES
 
 
 class SnapshotIntegrityError(ValueError):
@@ -31,41 +29,36 @@ def init_snapshot_store():
 
 def create_snapshot(dataset_name, cases, chunks, mmr_diversity):
     corpus, dataset = json.loads(_canonical(chunks)), json.loads(_canonical(cases))
-    snapshot = {
-        "dataset_name": dataset_name,
-        "cases": dataset,
-        "chunks": corpus,
-        "mmr_diversity": mmr_diversity,
-        "corpus_fingerprint": _fingerprint(corpus),
-        "dataset_fingerprint": _fingerprint(dataset),
-    }
+    snapshot = {"dataset_name": dataset_name, "cases": dataset, "chunks": corpus,
+                "mmr_diversity": mmr_diversity, "corpus_fingerprint": _fingerprint(corpus),
+                "dataset_fingerprint": _fingerprint(dataset)}
     with get_connection() as conn:
-        cursor = conn.execute("""INSERT INTO benchmark_snapshots
+        sql = """INSERT INTO benchmark_snapshots
             (dataset_name, corpus_fingerprint, dataset_fingerprint, mmr_diversity, snapshot_json)
-            VALUES (?, ?, ?, ?, ?)""",
-            (dataset_name, snapshot["corpus_fingerprint"], snapshot["dataset_fingerprint"],
-             mmr_diversity, _canonical(snapshot)))
+            VALUES (?, ?, ?, ?, ?)"""
+        values = (dataset_name, snapshot["corpus_fingerprint"], snapshot["dataset_fingerprint"],
+                  mmr_diversity, _canonical(snapshot))
+        if USING_POSTGRES:
+            snapshot_id = conn.execute(sql + " RETURNING id", values).fetchone()["id"]
+        else:
+            snapshot_id = conn.execute(sql, values).lastrowid
         conn.commit()
-        snapshot["snapshot_id"] = int(cursor.lastrowid)
+        snapshot["snapshot_id"] = int(snapshot_id)
     return snapshot
 
 
 def verify_snapshot(snapshot, stored_corpus_fingerprint=None, stored_dataset_fingerprint=None):
-    """Validate both content hashes and, when supplied, their persisted DB copies."""
     if not isinstance(snapshot, dict):
         raise SnapshotIntegrityError("Snapshot payload is not a valid object.")
     try:
-        corpus_fingerprint = _fingerprint(snapshot["chunks"])
-        dataset_fingerprint = _fingerprint(snapshot["cases"])
+        corpus_fingerprint, dataset_fingerprint = _fingerprint(snapshot["chunks"]), _fingerprint(snapshot["cases"])
         if corpus_fingerprint != snapshot["corpus_fingerprint"]:
             raise SnapshotIntegrityError("Snapshot corpus fingerprint mismatch; stored content may be corrupted.")
         if dataset_fingerprint != snapshot["dataset_fingerprint"]:
             raise SnapshotIntegrityError("Snapshot dataset fingerprint mismatch; stored labels may be corrupted.")
-        if (stored_corpus_fingerprint is not None
-                and corpus_fingerprint != stored_corpus_fingerprint):
+        if stored_corpus_fingerprint is not None and corpus_fingerprint != stored_corpus_fingerprint:
             raise SnapshotIntegrityError("Snapshot corpus fingerprint does not match its database metadata.")
-        if (stored_dataset_fingerprint is not None
-                and dataset_fingerprint != stored_dataset_fingerprint):
+        if stored_dataset_fingerprint is not None and dataset_fingerprint != stored_dataset_fingerprint:
             raise SnapshotIntegrityError("Snapshot dataset fingerprint does not match its database metadata.")
         if not isinstance(snapshot["dataset_name"], str) or not snapshot["dataset_name"]:
             raise SnapshotIntegrityError("Snapshot dataset name is invalid.")
@@ -84,8 +77,8 @@ def verify_snapshot(snapshot, stored_corpus_fingerprint=None, stored_dataset_fin
 def get_snapshot(snapshot_id):
     with get_connection() as conn:
         row = conn.execute("""SELECT id, created_at, snapshot_json,
-            corpus_fingerprint, dataset_fingerprint
-            FROM benchmark_snapshots WHERE id = ?""", (snapshot_id,)).fetchone()
+            corpus_fingerprint, dataset_fingerprint FROM benchmark_snapshots WHERE id = ?""",
+            (snapshot_id,)).fetchone()
     if row is None:
         return None
     try:
@@ -93,6 +86,5 @@ def get_snapshot(snapshot_id):
     except (TypeError, json.JSONDecodeError) as exc:
         raise SnapshotIntegrityError("Snapshot JSON is corrupted and cannot be decoded.") from exc
     verify_snapshot(snapshot, row["corpus_fingerprint"], row["dataset_fingerprint"])
-    snapshot["snapshot_id"] = int(row["id"])
-    snapshot["created_at"] = row["created_at"]
+    snapshot["snapshot_id"], snapshot["created_at"] = int(row["id"]), row["created_at"]
     return snapshot
