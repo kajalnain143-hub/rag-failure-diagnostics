@@ -32,7 +32,6 @@ services:
   - type: web
     name: rag-failure-diagnostics-web-kajal
     runtime: static
-    plan: free
     buildCommand: cd frontend && npm install --no-audit --no-fund && npm run build
     staticPublishPath: ./frontend/dist
     envVars:
