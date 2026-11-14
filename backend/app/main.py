@@ -28,6 +28,7 @@ from .benchmark_runner import ALLOWED_STRATEGIES, run_dataset
 from .benchmark_regression import compare_benchmark_runs
 from .benchmark_reports import build_benchmark_report, build_benchmark_insights, REPORT_METRICS
 from .benchmark_failure_analytics import analyze_benchmark_failures
+from .incident_store import init_incident_store, save_incident, list_incidents, get_incident, incident_pattern_summary
 from .benchmark_snapshots import init_snapshot_store, create_snapshot, get_snapshot, SnapshotIntegrityError
 
 app = FastAPI(
@@ -88,6 +89,7 @@ def startup():
     init_experiment_store()
     init_trace_store()
     init_snapshot_store()
+    init_incident_store()
 
 
 def extract_text(filename: str, content: bytes) -> str:
@@ -246,19 +248,55 @@ def diagnose_rag_incident(request: IncidentDiagnosisRequest):
             logs=request.logs,
             expected_behavior=request.expected_behavior,
         )
-        return {
-            "incident": {
-                "description": request.description,
-                "expected_behavior": request.expected_behavior,
-            },
-            "diagnosis": diagnosis,
+        incident = {
+            "description": request.description,
+            "expected_behavior": request.expected_behavior,
+            "logs": request.logs,
         }
+        saved = save_incident(incident, diagnosis)
+        return {"incident": incident, "diagnosis": diagnosis, "incident_id": saved["incident_id"],
+                "created_at": saved["created_at"]}
     except LLMNotConfiguredError as exc:
         raise HTTPException(status_code=503, detail="Gemini API key is not configured.") from exc
     except LLMGenerationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/diagnostics/incidents")
+def get_incident_history(limit: int = 50, pattern_id: str | None = None, severity: str | None = None):
+    try:
+        return {"incidents": list_incidents(limit, pattern_id, severity),
+                "summary": incident_pattern_summary()}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/diagnostics/incidents/{incident_id}")
+def get_incident_report(incident_id: str):
+    incident = get_incident(incident_id)
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident report not found.")
+    return {"incident": incident}
+
+
+@app.get("/api/diagnostics/incidents.csv")
+def export_incident_history(pattern_id: str | None = None, severity: str | None = None):
+    try:
+        incidents = list_incidents(200, pattern_id, severity)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["incident_id", "created_at", "primary_pattern_id", "secondary_pattern_ids",
+                     "severity", "confidence", "description", "expected_behavior", "logs"])
+    for item in incidents:
+        writer.writerow([item["incident_id"], item["created_at"], item["primary_pattern_id"],
+                         ";".join(item["secondary_pattern_ids"]), item["severity"], item["confidence"],
+                         item["description"], item["expected_behavior"], item["logs"]])
+    return Response(content=output.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": 'attachment; filename="incident-history.csv"'})
 
 
 @app.get("/api/experiments")
