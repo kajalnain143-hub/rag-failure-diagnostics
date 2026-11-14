@@ -16,6 +16,17 @@ jobs:
       - run: pytest backend/tests
         env:
           PYTHONPATH: backend
+  benchmark-regression-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest
+      - run: pytest -q backend/tests/test_benchmark_regression.py backend/tests/test_ci_benchmark_gate.py
+        env:
+          PYTHONPATH: backend
   frontend-build:
     runs-on: ubuntu-latest
     defaults:
