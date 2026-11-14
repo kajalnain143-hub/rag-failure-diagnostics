@@ -19,9 +19,14 @@ def init_incident_store() -> None:
                 severity TEXT NOT NULL,
                 confidence REAL NOT NULL,
                 diagnosis_json TEXT NOT NULL,
+                trace_id TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(incident_reports)")}
+        if "trace_id" not in columns:
+            conn.execute("ALTER TABLE incident_reports ADD COLUMN trace_id TEXT")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_incidents_trace ON incident_reports(trace_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_incidents_created ON incident_reports(created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_incidents_pattern ON incident_reports(primary_pattern_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_incidents_severity ON incident_reports(severity)")
@@ -38,13 +43,13 @@ def save_incident(incident: dict, diagnosis: dict) -> dict:
         conn.execute(
             """INSERT INTO incident_reports
             (incident_id, description, expected_behavior, logs, primary_pattern_id,
-             secondary_pattern_ids_json, severity, confidence, diagnosis_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+             secondary_pattern_ids_json, severity, confidence, diagnosis_json, trace_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (incident_id, incident.get("description", "")[:12000],
              incident.get("expected_behavior", "")[:5000], incident.get("logs", "")[:20000],
              primary, json.dumps(diagnosis.get("secondary_pattern_ids", [])),
              severity, float(diagnosis.get("confidence", 0)),
-             json.dumps(diagnosis, sort_keys=True)),
+             json.dumps(diagnosis, sort_keys=True), incident.get("trace_id")),
         )
         conn.commit()
     return get_incident(incident_id)
@@ -103,3 +108,51 @@ def incident_pattern_summary() -> dict:
         "patterns": [{"pattern_id": row["primary_pattern_id"], "count": row["count"]} for row in pattern_rows],
         "severity": {row["severity"]: row["count"] for row in severity_rows},
     }
+
+
+
+def incident_trace_analytics() -> dict:
+    """Summarize latency and mode signals only for incidents explicitly linked to traces."""
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT i.incident_id, i.primary_pattern_id, i.severity, i.confidence,
+                   t.trace_id, t.answer_mode, t.retrieval_mode, t.error,
+                   t.timings_json, t.retrieved_count, t.created_at AS trace_created_at
+            FROM incident_reports i
+            LEFT JOIN query_traces t ON t.trace_id = i.trace_id
+            ORDER BY i.created_at DESC
+        """).fetchall()
+    linked = []
+    unlinked = 0
+    for row in rows:
+        item = dict(row)
+        if not item.get("trace_id") or not item.get("timings_json"):
+            unlinked += 1
+            continue
+        timings = json.loads(item.pop("timings_json"))
+        item["timings"] = timings
+        item["total_ms"] = float(timings.get("total_ms", 0))
+        linked.append(item)
+    if not linked:
+        return {"incident_count": len(rows), "linked_count": 0, "unlinked_count": unlinked,
+                "avg_total_ms": None, "p95_total_ms": None, "by_pattern": [],
+                "by_answer_mode": [], "by_retrieval_mode": [],
+                "note": "No incidents are linked to query traces yet. Link a trace when submitting a diagnosis to enable correlation."}
+    durations = sorted(item["total_ms"] for item in linked)
+    p95_index = max(0, min(len(durations) - 1, __import__("math").ceil(0.95 * len(durations)) - 1))
+    def grouped(field):
+        buckets = {}
+        for item in linked:
+            key = item.get(field) or "unknown"
+            buckets.setdefault(key, []).append(item)
+        return [{"value": key, "incident_count": len(items),
+                 "avg_total_ms": round(sum(x["total_ms"] for x in items) / len(items), 2),
+                 "error_count": sum(bool(x.get("error")) for x in items)}
+                for key, items in sorted(buckets.items(), key=lambda pair: (-len(pair[1]), pair[0]))]
+    return {"incident_count": len(rows), "linked_count": len(linked), "unlinked_count": unlinked,
+            "avg_total_ms": round(sum(durations) / len(durations), 2),
+            "p95_total_ms": round(durations[p95_index], 2),
+            "by_pattern": grouped("primary_pattern_id"),
+            "by_answer_mode": grouped("answer_mode"),
+            "by_retrieval_mode": grouped("retrieval_mode"),
+            "note": "Correlation is descriptive, not causal. Only explicitly linked incident/trace pairs are included."}
