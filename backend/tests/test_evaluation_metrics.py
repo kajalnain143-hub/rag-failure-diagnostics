@@ -32,3 +32,8 @@ def test_evaluate_case_and_aggregate():
     assert result["mrr"] == 1.0
     assert aggregate_metrics([result])["case_count"] == 1
     assert aggregate_metrics([])["case_count"] == 0
+
+
+def test_evidence_terms_use_word_boundaries_and_ignore_punctuation():
+    assert evidence_term_coverage("Python, APIs; and RAG!", ["Python APIs and RAG"]) == 1.0
+    assert evidence_term_coverage("Python", ["Pythonic"]) == 0.0
