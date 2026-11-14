@@ -1,113 +1,121 @@
 # RAG Failure Diagnostics & Evaluation Platform
 
-A lightweight, full-stack MVP for inspecting retrieval quality and diagnosing common failure patterns in Retrieval-Augmented Generation (RAG) workflows.
+A full-stack RAG workbench focused on diagnosing retrieval and answer-generation failures. Current capabilities include document ingestion, TF-IDF retrieval, transparent retrieval diagnostics, Gemini-grounded answer generation, and an initial automated test suite.
 
-> **Current implementation:** document ingestion, text chunking, TF-IDF retrieval, retrieval diagnostics, a baseline lexical evaluation metric, and a React dashboard. This version does not yet generate LLM answers or claim to detect hallucinations.
+## Current capabilities
 
-## Features
+- Upload PDF, TXT, and Markdown files (10 MB limit)
+- Extract text, split it into overlapping chunks, and persist chunks in SQLite
+- Retrieve evidence using TF-IDF and cosine similarity
+- Diagnose no-context, weak-retrieval, and retrieval-candidate states
+- Generate grounded answers with Gemini 2.5 Flash
+- Instruct Gemini to cite source labels such as [S1] and abstain when evidence is insufficient
+- Return source metadata, retrieval scores, and answer-generation status
+- Disable generation to inspect retrieval independently
+- Baseline lexical reference-answer coverage metric
+- Pytest tests for chunking, retrieval, diagnostics, and evaluation
 
-- Upload PDF, TXT, and Markdown documents
-- Extract text and split it into overlapping chunks
-- Store documents and chunks in SQLite
-- Retrieve relevant chunks using TF-IDF and cosine similarity
-- Inspect similarity scores and retrieval diagnostics
-- Compare retrieved context with a supplied reference answer
-- Use a React dashboard to upload, query, and inspect results
+> Source labels improve traceability but do not guarantee factual correctness. The current retrieval and reference-answer metrics are lexical baselines, not semantic relevance or hallucination detection.
 
 ## Architecture
 
-```text
-rag-failure-diagnostics/
-├── backend/
-│   ├── app/
-│   │   ├── __init__.py
-│   │   ├── database.py
-│   │   ├── diagnostics.py
-│   │   ├── main.py
-│   │   ├── rag_engine.py
-│   │   └── schemas.py
-│   └── requirements.txt
-└── frontend/
-    ├── src/
-    │   ├── App.jsx
-    │   ├── main.jsx
-    │   └── styles.css
-    ├── index.html
-    ├── package.json
-    └── vite.config.js
-```
+    Documents (PDF/TXT/MD) -> extraction -> chunks -> SQLite
+    Question -> TF-IDF retrieval -> ranked evidence -> diagnostics
+                                                -> Gemini grounded generation
+                                                -> API response with source metadata
+    React dashboard <---------------------------+
 
-## Requirements
+## Stack
 
-- Python 3.10 or newer
-- Node.js 18 or newer
-- npm
+- Backend: Python, FastAPI, Pydantic
+- LLM: Google Gemini Developer API via google-genai
+- Retrieval baseline: scikit-learn TF-IDF + cosine similarity
+- Storage: SQLite
+- Frontend: React + Vite
+- Tests: pytest
 
-## Run locally on Windows
+## Setup (Windows 11)
 
-### 1. Clone the repository
+### 1. Clone and prepare backend
 
-```bash
-git clone https://github.com/kajalnain143-hub/rag-failure-diagnostics.git
-cd rag-failure-diagnostics
-```
+    git clone https://github.com/kajalnain143-hub/rag-failure-diagnostics.git
+    cd rag-failure-diagnostics/backend
+    python -m venv .venv
+    .venv\Scripts\activate
+    pip install -r requirements.txt
 
-### 2. Start the backend
+### 2. Configure Gemini
 
-Open a terminal:
+Copy backend/.env.example to backend/.env and add your Google AI Studio key:
 
-```bash
-cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
+    GEMINI_API_KEY=your_key_here
+    GEMINI_MODEL=gemini-2.5-flash
 
-The API will be available at http://localhost:8000. Interactive API documentation: http://localhost:8000/docs.
+Generate a key at https://aistudio.google.com/app/apikey. Never commit .env or paste the key into source code. Gemini free-tier model availability and request limits can vary by model, region, and account. Check https://ai.google.dev/gemini-api/docs/pricing before use.
 
-### 3. Start the frontend
+### 3. Start backend
 
-Open a second terminal from the project root:
+From the backend directory:
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+    uvicorn app.main:app --reload
 
-Open the local URL printed by Vite, normally http://localhost:5173.
+API docs: http://localhost:8000/docs
 
-## API endpoints
+### 4. Start frontend
+
+Open another terminal from the repository root:
+
+    cd frontend
+    npm install
+    npm run dev
+
+Open the Vite URL, normally http://localhost:5173.
+
+## Run tests
+
+From backend with the virtual environment active:
+
+    pytest
+
+## API
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| GET | `/` | API welcome message |
-| GET | `/health` | Health check |
-| GET | `/api/documents` | List indexed documents |
-| POST | `/api/documents/upload` | Upload and index a document |
-| POST | `/api/query` | Retrieve chunks and diagnose retrieval |
-| POST | `/api/evaluate` | Compare retrieved context with a reference answer |
+| GET | / | API information |
+| GET | /health | Health check |
+| GET | /api/documents | List indexed documents |
+| POST | /api/documents/upload | Upload and index a document |
+| POST | /api/query | Retrieve, diagnose, and optionally generate a Gemini answer |
+| POST | /api/evaluate | Compare retrieved context with a reference answer |
 
-## Evaluation notes
+Example query body:
 
-The current retrieval engine uses TF-IDF lexical features and cosine similarity. The reference-answer coverage metric measures lexical overlap only. These metrics are useful for a transparent baseline, but they are not substitutes for semantic evaluation, factuality checks, or human review.
+    {
+      "question": "What is the main topic of this document?",
+      "top_k": 4,
+      "generate_answer": true
+    }
+
+Set generate_answer to false to isolate retrieval from generation.
+
+## Evaluation honesty
+
+The expected-answer coverage score measures lexical term overlap between the reference answer and retrieved context. It is not a semantic relevance score, faithfulness score, or hallucination detector. Gemini is instructed to ground answers in retrieved chunks and cite them, but generated citations still require evaluation.
 
 ## Roadmap
 
-- [x] Initial FastAPI service
-- [x] Document upload and text extraction
-- [x] Chunking and SQLite persistence
-- [x] TF-IDF retrieval baseline
-- [x] Retrieval diagnostics and lexical evaluation
-- [x] React dashboard
-- [ ] Automated test suite
-- [ ] Embedding-based semantic retrieval
-- [ ] LLM answer generation with source citations
-- [ ] RAGAS-based evaluation
-- [ ] Experiment history and comparison
-- [ ] Docker deployment
+- [x] FastAPI service and document ingestion
+- [x] SQLite persistence and TF-IDF retrieval baseline
+- [x] Initial retrieval diagnostics and lexical evaluation
+- [x] Gemini grounded answer generation and source metadata
+- [x] Initial automated unit tests
+- [ ] Dense semantic embeddings and hybrid retrieval
+- [ ] Reranking and retrieval ablation experiments
+- [ ] Faithfulness and answer-relevance evaluation with curated benchmark
+- [ ] Persistent experiment runs and comparison dashboard
+- [ ] PostgreSQL + pgvector storage option
+- [ ] Docker, CI workflow, deployment, and demo
 
 ## Project status
 
-**MVP under active development.** Features will be expanded and validated as the project evolves.
+**Active development — Phase 1 committed.** Repository changes have not yet been run in your Windows environment or against a live Gemini API key. Test results, live API behavior, and deployment will be reported only after verification.
