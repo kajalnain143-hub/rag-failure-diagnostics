@@ -10,8 +10,6 @@ services:
     envVars:
       - key: PORT
         value: "10000"
-      - key: RAG_DB_PATH
-        value: /tmp/rag_diagnostics.db
       - key: DATABASE_URL
         fromDatabase:
           name: rag-failure-diagnostics-db
@@ -32,13 +30,6 @@ services:
         value: gemini-embedding-001
       - key: CORS_ORIGINS
         value: https://rag-failure-diagnostics-web-live.onrender.com,https://rag-failure-diagnostics-web-kajal.onrender.com
-
-databases:
-  - name: rag-failure-diagnostics-db
-    plan: free
-    region: singapore
-    databaseName: rag_failure_diagnostics_db
-    user: rag_failure_diagnostics_db_user
 
   - type: web
     name: rag-failure-diagnostics-web-live
@@ -62,3 +53,10 @@ databases:
       - path: /*
         name: Referrer-Policy
         value: strict-origin-when-cross-origin
+
+databases:
+  - name: rag-failure-diagnostics-db
+    plan: free
+    region: singapore
+    databaseName: rag_failure_diagnostics_db
+    user: rag_failure_diagnostics_db_user
