@@ -50,7 +50,7 @@ export default function App() {
 
   useEffect(() => {
     loadDocuments();
-    loadExperiments().catch(() => {});
+    loadExperiments().catch(() => {});\n    loadTraces().catch(() => {});
   }, []);
 
   async function uploadDocument(event) {
@@ -85,7 +85,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, top_k: 4 })
       });
-      setResult(data);
+      setResult(data);\n      await loadTraces();
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -253,7 +253,7 @@ export default function App() {
   async function refreshDashboard() {
     setDashboardBusy(true);
     try {
-      await Promise.all([loadExperiments(), loadDocuments()]);
+      await Promise.all([loadExperiments(), loadDocuments(), loadTraces()]);
       setMessage("Dashboard data refreshed.");
     } catch (error) {
       setMessage(error.message);
@@ -431,6 +431,23 @@ export default function App() {
           <div className="table-wrap"><table className="experiment-table"><thead><tr><th>Run</th><th>Configuration</th><th>Metrics</th><th>Created</th></tr></thead><tbody>
             {experiments.map(run => <tr key={run.id}><td><b>#{run.id} · {run.name}</b>{run.notes && <small>{run.notes}</small>}</td><td><code>{JSON.stringify(run.config)}</code></td><td><code>{JSON.stringify(run.metrics)}</code></td><td>{run.created_at}</td></tr>)}
           </tbody></table></div>}
+      </section>
+      <section className="panel" id="observability">
+        <div className="section-heading"><div><div className="eyebrow">06 / OBSERVABILITY & TRACING</div><h2>Query traces</h2></div><button className="secondary compact" onClick={loadTraces}>Refresh traces</button></div>
+        <p className="hint">Har query ka unique trace ID, embedding/retrieval/generation latency aur total response time yahan store hota hai. Token usage abhi unavailable hai jab tak provider response metadata expose nahi karta; cost estimate intentionally show nahi kiya gaya.</p>
+        {traces.length === 0 ? <div className="empty-state">No query traces yet. Run a knowledge-base query to create the first trace.</div> :
+          <div className="table-wrap"><table className="experiment-table"><thead><tr><th>Trace</th><th>Mode</th><th>Embedding</th><th>Retrieval</th><th>Generation</th><th>Total</th><th>Time</th></tr></thead><tbody>
+            {traces.map(trace => <tr key={trace.trace_id} onClick={() => inspectTrace(trace.trace_id)} className="trace-row">
+              <td><button className="trace-link" onClick={() => inspectTrace(trace.trace_id)}>{trace.trace_id.slice(0, 8)}…</button><small>{trace.question}</small></td>
+              <td>{trace.answer_mode} / {trace.retrieval_mode}</td><td>{trace.timings.embedding_ms} ms</td><td>{trace.timings.retrieval_ms} ms</td><td>{trace.timings.generation_ms} ms</td><td><b>{trace.timings.total_ms} ms</b></td><td>{trace.created_at}</td>
+            </tr>)}
+          </tbody></table></div>}
+        {selectedTrace && <div className="answer"><div className="eyebrow">TRACE DETAIL · {selectedTrace.trace_id}</div>
+          <p><b>Question:</b> {selectedTrace.question}</p><p><b>Retrieved chunks:</b> {selectedTrace.retrieved_count} · <b>Top K:</b> {selectedTrace.top_k}</p>
+          <p><b>Token usage:</b> {selectedTrace.token_usage ? JSON.stringify(selectedTrace.token_usage) : "Not reported by provider"}</p>
+          {selectedTrace.error && <p className="issue">Error: {selectedTrace.error}</p>}
+          <button className="secondary compact" onClick={() => setSelectedTrace(null)}>Close details</button>
+        </div>}
       </section>
       <footer>RAG Failure Diagnostics · Gemini grounded generation · Incident clinic · Evaluation lab</footer>
     </main>
