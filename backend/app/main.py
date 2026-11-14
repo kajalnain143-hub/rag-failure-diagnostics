@@ -14,7 +14,7 @@ from .incident_schemas import IncidentDiagnosisRequest
 from .rag_engine import retrieve, split_into_chunks
 from .schemas import EvaluationRequest, QueryRequest
 from .experiment_store import init_experiment_store, list_experiments, save_experiment
-from .evaluation_metrics import evaluate_case
+from .evaluation_metrics import aggregate_metrics, evaluate_case
 
 app = FastAPI(
     title="RAG Failure Diagnostics API",
@@ -198,3 +198,53 @@ def evaluate_benchmark_case(payload: dict):
     results = retrieve(question, chunks, int(payload.get("k", 5)))
     metrics = evaluate_case(payload, results)
     return {"metrics": metrics, "retrieved_chunks": results}
+
+
+
+@app.post("/api/benchmark/compare")
+def compare_retrieval_strategies(payload: dict):
+    """Run one labeled query through TF-IDF, hybrid, and hybrid+MMR."""
+    required = ("query_id", "question", "relevant_chunk_ids", "reference_answer")
+    if any(key not in payload for key in required):
+        raise HTTPException(status_code=400, detail=f"Required fields: {', '.join(required)}")
+    if not isinstance(payload["relevant_chunk_ids"], list):
+        raise HTTPException(status_code=400, detail="relevant_chunk_ids must be a list.")
+    chunks = get_all_chunks()
+    if not chunks:
+        raise HTTPException(status_code=400, detail="Upload a document before running a benchmark.")
+    question = str(payload["question"]).strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question cannot be empty.")
+    try:
+        k = max(1, min(int(payload.get("k", 5)), 10))
+        diversity = float(payload.get("mmr_diversity", 0.35))
+        query_vector = embed_query(question)
+        strategies = ("tfidf", "hybrid", "hybrid_mmr")
+        comparisons = {}
+        for strategy in strategies:
+            retrieved = retrieve(
+                question, chunks, k, query_embedding=query_vector,
+                strategy=strategy, mmr_diversity=diversity,
+            )
+            comparisons[strategy] = {
+                "metrics": evaluate_case(payload, retrieved, k),
+                "retrieved_chunks": retrieved,
+            }
+        summary = aggregate_metrics([row["metrics"] for row in comparisons.values()])
+        best_strategy = max(
+            strategies,
+            key=lambda name: (
+                comparisons[name]["metrics"]["ndcg_at_k"],
+                comparisons[name]["metrics"]["mrr"],
+                comparisons[name]["metrics"]["recall_at_k"],
+            ),
+        )
+        return {
+            "query_id": payload["query_id"],
+            "comparison": comparisons,
+            "best_strategy": best_strategy,
+            "selection_note": "Best strategy is ranked by nDCG@K, then MRR, then Recall@K for this query only.",
+            "metric_note": summary.get("metric_note", "Metrics are computed against manually labeled chunk IDs."),
+        }
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
