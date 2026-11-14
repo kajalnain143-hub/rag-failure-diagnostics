@@ -363,6 +363,33 @@ def evaluate_benchmark_case(payload: dict):
 
 
 
+@app.get("/api/benchmark/corpus")
+def export_benchmark_corpus():
+    """Expose real indexed chunk IDs and text to author correctly labeled datasets."""
+    chunks = get_all_chunks()
+    return {
+        "chunk_count": len(chunks),
+        "chunks": [
+            {
+                "chunk_id": item["id"],
+                "document_id": item["document_id"],
+                "filename": item["filename"],
+                "chunk_index": item.get("chunk_index"),
+                "content": item["content"],
+            }
+            for item in chunks[:500]
+        ],
+        "dataset_case_template": {
+            "query_id": "replace-with-stable-id",
+            "question": "Write a question answerable from the indexed corpus.",
+            "relevant_chunk_ids": ["replace-with-real-chunk-id"],
+            "reference_answer": "Write a concise answer supported by the relevant chunk.",
+            "k": 5,
+        },
+        "note": "Replace the placeholder relevant_chunk_ids with actual integer chunk_id values. Label relevance manually; do not treat every retrieved chunk as gold evidence.",
+    }
+
+
 @app.post("/api/benchmark/compare")
 def compare_retrieval_strategies(payload: dict):
     """Run one labeled query through TF-IDF, hybrid, and hybrid+MMR."""
