@@ -1,10 +1,14 @@
 """Gemini answer generation with explicit source-grounding and safe fallbacks."""
 import os
 from functools import lru_cache
+from pathlib import Path
 
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+# Load backend/.env for local development; deployment environments can inject variables.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
@@ -55,10 +59,7 @@ def generate_grounded_answer(question: str, chunks: list[dict]) -> str:
         response = _client().models.generate_content(
             model=MODEL_NAME,
             contents=build_grounded_prompt(question, chunks),
-            config=types.GenerateContentConfig(
-                temperature=0.1,
-                max_output_tokens=700,
-            ),
+            config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=700),
         )
         answer = (response.text or "").strip()
         if not answer:
@@ -67,7 +68,6 @@ def generate_grounded_answer(question: str, chunks: list[dict]) -> str:
     except (LLMNotConfiguredError, LLMGenerationError):
         raise
     except Exception as exc:
-        # Avoid leaking provider internals or API-key-related details to clients.
         raise LLMGenerationError(
             "Gemini generation failed. Check API quota, model access, and server logs."
         ) from exc
