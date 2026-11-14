@@ -89,18 +89,36 @@ The regression suite covers SQLite persistence, chunking and retrieval, benchmar
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| GET | / | API information |
-| GET | /health | Health check |
-| GET | /api/documents | List indexed documents |
-| POST | /api/documents/upload | Upload and index a document |
-| POST | /api/query | Retrieve, diagnose, and optionally generate a Gemini answer |
-| POST | /api/evaluate | Compare retrieved context with a reference answer |\n| GET | /api/diagnostics/patterns | List supported P01–P12 failure patterns |\n| POST | /api/diagnostics/incident | Diagnose and persist a reported RAG/LLM incident with Gemini |
-| GET | /api/diagnostics/incidents | List and filter saved incident history with pattern/severity summary |
-| GET | /api/diagnostics/incidents/{incident_id} | Retrieve one saved incident report |
-| GET | /api/diagnostics/incidents.csv | Export filtered incident history as CSV |
-| GET | /api/diagnostics/incident-observability | Summarize latency and answer/retrieval modes for explicitly linked incidents |
-| GET | /api/diagnostics/patterns | List supported P01–P12 failure patterns |
-| POST | /api/diagnostics/incident | Diagnose a reported RAG/LLM incident with Gemini |
+| GET | `/` | API information |
+| GET | `/health` | Database readiness check |
+| GET | `/api/documents` | List indexed documents |
+| POST | `/api/documents/upload` | Upload PDF, TXT, or Markdown |
+| POST | `/api/query` | Retrieve evidence, diagnose, and optionally generate a Gemini answer |
+| POST | `/api/evaluate` | Baseline retrieval evaluation |
+| GET | `/api/traces` | List recent query traces |
+| GET | `/api/traces/{trace_id}` | Retrieve one trace |
+| GET | `/api/diagnostics/patterns` | List P01–P12 failure taxonomy |
+| POST | `/api/diagnostics/incident` | Diagnose and persist a reported incident |
+| GET | `/api/diagnostics/incidents` | Filter incident history and summaries |
+| GET | `/api/diagnostics/incidents/{incident_id}` | Retrieve an incident report |
+| GET | `/api/diagnostics/incidents.csv` | Export incident history |
+| GET | `/api/diagnostics/incident-observability` | Summarize linked incident/trace observability |
+| GET | `/api/benchmark/corpus` | Export indexed chunks for manual gold labeling |
+| POST | `/api/benchmark/evaluate` | Evaluate one labeled retrieval case |
+| POST | `/api/benchmark/compare` | Compare TF-IDF, hybrid, and hybrid+MMR for one query |
+| POST | `/api/benchmark/run` | Run a labeled dataset across selected strategies |
+| POST | `/api/benchmark/tune-mmr` | Sweep MMR diversity values on the same labeled dataset |
+| POST | `/api/benchmark/regression` | Gate quality drops between comparable saved runs |
+| GET | `/api/benchmark/snapshots/{snapshot_id}` | Read and integrity-check a benchmark snapshot |
+| POST | `/api/benchmark/snapshots/{snapshot_id}/replay` | Replay saved corpus and dataset inputs |
+| GET | `/api/benchmark/report` | Historical metric trends |
+| GET | `/api/benchmark/report.csv` | Download benchmark history |
+| GET | `/api/benchmark/insights` | Compare latest comparable strategies and recommendations |
+| GET | `/api/benchmark/failure-analytics` | Rule-based aggregate failure signals |
+| POST | `/api/quality/evaluate` | Gemini-assisted answer-grounding evaluation |
+| GET | `/api/experiments` | List saved experiments |
+
+All `/api/*` endpoints require a bearer token when `API_AUTH_TOKEN` is configured.
 
 Example query body:
 
@@ -154,11 +172,13 @@ The expected-answer coverage score measures lexical term overlap between the ref
 - [x] Historical benchmark reports with CSV export
 - [x] Immutable benchmark snapshots and SHA-256 corpus/dataset fingerprints
 - [x] Snapshot replay independent of the live indexed corpus
-- [x] Batch dataset benchmarking with latency summaries
-- [x] Benchmark regression gates for comparable saved runs
-- [ ] PostgreSQL + pgvector storage option
+- [x] Explainable per-query retrieval failure diagnostics
+- [x] Benchmark dataset validation against current corpus chunk IDs
+- [x] MMR diversity tuning sweep with saved experiments
+- [ ] PostgreSQL + pgvector storage option (not implemented)
 - [x] Docker and CI workflow configuration (execution still pending verification)
-- [x] Optional bearer-token API authentication and configurable process-local rate limiting\n- [x] Production-oriented Docker images, health checks, non-root backend, and deployment checklist\n- [ ] Cloud deployment and public demo
+- [x] Optional bearer-token API authentication and configurable process-local rate limiting
+- [x] Production-oriented Docker images, health checks, non-root backend, and deployment checklist\n- [ ] Cloud deployment and public demo
 
 ## Project status
 
