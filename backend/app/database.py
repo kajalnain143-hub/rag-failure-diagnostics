@@ -1,4 +1,5 @@
-import os\nimport sqlite3
+import os
+import sqlite3
 from pathlib import Path
 
 DB_PATH = Path(os.getenv("RAG_DB_PATH", str(Path(__file__).resolve().parents[1] / "rag_diagnostics.db")))
