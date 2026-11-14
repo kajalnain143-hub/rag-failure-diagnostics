@@ -290,3 +290,24 @@ def test_snapshot_replay_uses_snapshot_chunks_not_live_corpus(monkeypatch):
     assert response.status_code == 200
     assert seen[0][0]["content"] == "Snapshot evidence"
     assert response.json()["snapshot_id"] == 5
+
+
+
+def test_snapshot_endpoint_returns_conflict_for_corrupted_snapshot(monkeypatch):
+    from app.benchmark_snapshots import SnapshotIntegrityError
+    monkeypatch.setattr(main, "get_snapshot", lambda snapshot_id: (_ for _ in ()).throw(
+        SnapshotIntegrityError("Snapshot corpus fingerprint mismatch.")))
+    with client(monkeypatch) as test_client:
+        response = test_client.get("/api/benchmark/snapshots/5")
+    assert response.status_code == 409
+    assert "fingerprint mismatch" in response.json()["detail"]
+
+
+def test_snapshot_replay_rejects_corrupted_snapshot(monkeypatch):
+    from app.benchmark_snapshots import SnapshotIntegrityError
+    monkeypatch.setattr(main, "get_snapshot", lambda snapshot_id: (_ for _ in ()).throw(
+        SnapshotIntegrityError("Snapshot dataset fingerprint mismatch.")))
+    with client(monkeypatch) as test_client:
+        response = test_client.post("/api/benchmark/snapshots/5/replay", json={"strategies": ["tfidf"]})
+    assert response.status_code == 409
+    assert "fingerprint mismatch" in response.json()["detail"]
