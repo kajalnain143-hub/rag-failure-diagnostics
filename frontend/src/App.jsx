@@ -96,7 +96,7 @@ export default function App() {
         <div className="eyebrow">AI RELIABILITY WORKBENCH</div>
         <h1>RAG Failure <span>Diagnostics</span></h1>
         <p>Inspect retrieval quality, surface weak context, and evaluate your RAG pipeline.</p>
-        <div className="status"><i /> Lightweight MVP · TF-IDF retrieval</div>
+        <div className="status"><i /> Gemini-grounded answers · TF-IDF retrieval baseline</div>
       </header>
 
       {message && <div className="notice">{message}</div>}
@@ -119,9 +119,9 @@ export default function App() {
           <button disabled={busy}>{busy ? "Analyzing..." : "Run retrieval diagnostics"}</button>
         </form>
         {result && <div className="results">
-          <div className="answer"><div className="eyebrow">RETRIEVED CONTEXT PREVIEW</div><p>{result.answer}</p></div>
+          <div className="answer"><div className="eyebrow">ANSWER · {result.answer_mode?.replaceAll("_", " ")}</div><p>{result.answer}</p></div>
           <div className="diagnostic"><div><div className="eyebrow">DIAGNOSTIC STATUS</div><strong>{result.diagnostics.status.replaceAll("_", " ")}</strong></div><div className="score">{result.diagnostics.best_similarity_score ?? 0}<small>best similarity</small></div></div>
-          {result.diagnostics.issues?.map((item, i) => <p className="issue" key={i}>⚠ {item}</p>)}
+          {result.sources?.length > 0 && <><h3>Answer sources</h3>{result.sources.map(source => <article className="chunk" key={source.label}><div><b>[{source.label}] {source.filename}</b><span>Score: {source.score}</span></div><p>{source.content}</p></article>)}</>}\n          {result.diagnostics.issues?.map((item, i) => <p className="issue" key={i}>⚠ {item}</p>)}
           {result.diagnostics.recommendations?.map((item, i) => <p className="recommendation" key={i}>→ {item}</p>)}
           <h3>Retrieved chunks</h3>
           {result.retrieved_chunks.map(chunk => <article className="chunk" key={chunk.chunk_id}><div><b>{chunk.filename}</b><span>Score: {chunk.score}</span></div><p>{chunk.content}</p></article>)}
@@ -137,7 +137,7 @@ export default function App() {
         <button className="secondary" onClick={runEvaluation} disabled={busy}>Evaluate retrieval</button>
         {evaluation && <div className="evaluation"><strong>{(evaluation.evaluation.expected_answer_term_coverage * 100).toFixed(1)}%</strong><span>Expected-answer term coverage</span><p>{evaluation.evaluation.interpretation}</p></div>}
       </section>
-      <footer>RAG Failure Diagnostics · MVP v0.1.0 · Transparent retrieval analysis</footer>
+      <footer>RAG Failure Diagnostics · v0.2.0 · Gemini grounded generation</footer>
     </main>
   );
 }
