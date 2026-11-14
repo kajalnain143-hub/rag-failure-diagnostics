@@ -85,3 +85,14 @@ def get_documents():
             ORDER BY documents.id DESC
         """).fetchall()
         return [dict(row) for row in rows]
+
+
+def create_database_backup() -> bytes:
+    """Create a consistent SQLite online backup as portable database bytes."""
+    with get_connection() as source:
+        target = sqlite3.connect(":memory:")
+        try:
+            source.backup(target)
+            return target.serialize()
+        finally:
+            target.close()
