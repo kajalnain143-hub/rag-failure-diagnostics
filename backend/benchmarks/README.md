@@ -25,3 +25,16 @@ MMR uses cosine similarity between stored embeddings when all indexed chunks hav
 compatible vectors. If embeddings are unavailable, it falls back to TF-IDF chunk
 similarity, so the comparison remains usable without a Gemini API key. The default
 diversity weight is 0.35; larger values penalize redundancy more strongly.
+
+## Answer grounding evaluation
+
+The API exposes `POST /api/quality/evaluate` for model-assisted answer evaluation.
+Send `question`, `answer`, and `retrieved_chunk_ids` (real IDs from the current
+knowledge base). Optionally include `relevant_chunk_ids` to calculate context
+precision and context recall from manually labeled evidence.
+
+Gemini inspects factual claims against only the retrieved chunks and returns a
+faithfulness estimate plus supported and unsupported claims. This is an
+LLM-as-a-judge signal: it can make mistakes and must not be presented as a
+human-verified hallucination verdict. The context precision/recall values are
+only as reliable as the supplied relevance labels.
