@@ -81,6 +81,8 @@ From backend with the virtual environment active:
 
     pytest
 
+The regression suite covers SQLite persistence, chunking and retrieval, benchmark metrics, MMR strategies, answer-quality parsing, trace persistence, CORS and database readiness, plus API-level document upload and query workflows. API tests mock external Gemini calls so the suite does not require a live API key or incur model usage.
+
 ## API
 
 | Method | Endpoint | Purpose |
