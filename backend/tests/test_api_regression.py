@@ -10,6 +10,9 @@ def client(monkeypatch):
     monkeypatch.setattr(main, "init_experiment_store", lambda: None)
     monkeypatch.setattr(main, "init_trace_store", lambda: None)
     monkeypatch.setattr(main, "init_snapshot_store", lambda: None)
+    monkeypatch.setattr(main, "create_snapshot", lambda name, cases, chunks, diversity: {
+        "snapshot_id": 1, "corpus_fingerprint": "test-corpus",
+        "dataset_fingerprint": "test-dataset"})
     monkeypatch.setattr(main, "init_snapshot_store", lambda: None)
     return TestClient(main.app)
 
