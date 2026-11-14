@@ -49,11 +49,14 @@ export default function App() {
   const [replayBusy, setReplayBusy] = useState(false);
   const [qualityResult, setQualityResult] = useState(null);
   const [message, setMessage] = useState("");
+  const [apiToken, setApiToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [dashboardBusy, setDashboardBusy] = useState(false);
 
   async function apiRequest(path, options = {}) {
-    const response = await fetch(`${API}${path}`, options);
+    const headers = new Headers(options.headers || {});
+    if (apiToken.trim()) headers.set("Authorization", `Bearer ${apiToken.trim()}`);
+    const response = await fetch(`${API}${path}`, { ...options, headers });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.detail || data.message || `Request failed (${response.status})`);
     return data;
@@ -479,6 +482,12 @@ export default function App() {
         <h1>RAG Failure <span>Diagnostics</span></h1>
         <p>Inspect retrieval quality, diagnose incidents, and evaluate your RAG pipeline.</p>
         <div className="status"><i /> Gemini-grounded answers · Incident triage · Evaluation lab</div>
+        <div className="subsection">
+          <label>API access token (only if API_AUTH_TOKEN is configured)
+            <input type="password" value={apiToken} onChange={event => setApiToken(event.target.value)} placeholder="Enter Bearer token for this session" autoComplete="off" />
+          </label>
+          <p className="hint">Token is kept in page memory only and is not saved to local storage.</p>
+        </div>
       </header>
 
       {message && <div className="notice" role="status">{message}</div>}
