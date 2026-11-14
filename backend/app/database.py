@@ -3,7 +3,6 @@ import os
 import re
 import sqlite3
 from pathlib import Path
-from urllib.parse import urlparse
 
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 DB_PATH = Path(os.getenv("RAG_DB_PATH", str(Path(__file__).resolve().parents[1] / "rag_diagnostics.db")))
@@ -20,7 +19,10 @@ class PostgresConnection:
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        return self._connection.__exit__(exc_type, exc, tb)
+        try:
+            return self._connection.__exit__(exc_type, exc, tb)
+        finally:
+            self._connection.close()
 
     def execute(self, sql, params=()):
         sql = sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
