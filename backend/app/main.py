@@ -1,5 +1,7 @@
 from io import BytesIO
 from pathlib import Path
+from time import perf_counter
+from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,7 +16,9 @@ from .incident_schemas import IncidentDiagnosisRequest
 from .rag_engine import retrieve, split_into_chunks
 from .schemas import EvaluationRequest, QueryRequest
 from .experiment_store import init_experiment_store, list_experiments, save_experiment
-from .evaluation_metrics import aggregate_metrics, evaluate_case\nfrom .answer_quality import context_precision_recall, evaluate_answer_grounding
+from .evaluation_metrics import aggregate_metrics, evaluate_case
+from .answer_quality import context_precision_recall, evaluate_answer_grounding
+from .trace_store import init_trace_store, save_trace, list_traces, get_trace
 
 app = FastAPI(
     title="RAG Failure Diagnostics API",
@@ -34,6 +38,7 @@ app.add_middleware(
 def startup():
     init_db()
     init_experiment_store()
+    init_trace_store()
 
 
 def extract_text(filename: str, content: bytes) -> str:
@@ -48,8 +53,7 @@ def extract_text(filename: str, content: bytes) -> str:
             reader = PdfReader(BytesIO(content))
             if reader.is_encrypted:
                 raise HTTPException(status_code=400, detail="Password-protected PDFs are not supported.")
-            return "
-".join(page.extract_text() or "" for page in reader.pages)
+            return "\n".join(page.extract_text() or "" for page in reader.pages)
         except HTTPException:
             raise
         except Exception as exc:
@@ -92,31 +96,72 @@ async def upload_document(file: UploadFile = File(...)):
 
 @app.post("/api/query")
 def query_documents(request: QueryRequest):
-    chunks = get_all_chunks()
-    if not chunks:
-        raise HTTPException(status_code=400, detail="Upload a document before asking a question.")
-    query_vector = embed_query(request.question)
-    results = retrieve(request.question, chunks, request.top_k, query_embedding=query_vector)
-    diagnostic = diagnose(request.question, results)
-    sources = [
-        {"label": f"S{index}", "chunk_id": item["chunk_id"], "document_id": item["document_id"],
-         "filename": item["filename"], "score": item["score"], "content": item["content"]}
-        for index, item in enumerate(results, start=1)
-    ]
-    if not results or results[0]["score"] < 0.05:
-        answer, answer_mode = "I could not find sufficiently relevant context in the indexed documents.", "insufficient_context"
-    elif not request.generate_answer:
-        answer, answer_mode = "Answer generation was disabled. Review the retrieved evidence below.", "retrieval_only"
-    else:
-        try:
-            answer, answer_mode = generate_grounded_answer(request.question, results), "gemini"
-        except LLMNotConfiguredError:
-            answer, answer_mode = "Gemini API key is not configured. Add GEMINI_API_KEY to backend/.env to enable generation.", "llm_not_configured"
-        except LLMGenerationError as exc:
-            answer, answer_mode = str(exc), "llm_error"
-    return {"question": request.question, "answer": answer, "answer_mode": answer_mode,
-            "model": "gemini-2.5-flash" if answer_mode == "gemini" else None,
-            "retrieved_chunks": results, "sources": sources, "diagnostics": diagnostic, "retrieval_mode": results[0].get("retrieval_mode") if results else "none"}
+    trace_id = str(uuid4())
+    started = perf_counter()
+    timings = {"embedding_ms": 0.0, "retrieval_ms": 0.0, "generation_ms": 0.0}
+    answer_mode, retrieval_mode, token_usage = "error", "none", None
+    try:
+        chunks = get_all_chunks()
+        if not chunks:
+            raise HTTPException(status_code=400, detail="Upload a document before asking a question.")
+        stage = perf_counter()
+        query_vector = embed_query(request.question)
+        timings["embedding_ms"] = round((perf_counter() - stage) * 1000, 2)
+        stage = perf_counter()
+        results = retrieve(request.question, chunks, request.top_k, query_embedding=query_vector)
+        timings["retrieval_ms"] = round((perf_counter() - stage) * 1000, 2)
+        retrieval_mode = results[0].get("retrieval_mode") if results else "none"
+        diagnostic = diagnose(request.question, results)
+        sources = [
+            {"label": f"S{index}", "chunk_id": item["chunk_id"], "document_id": item["document_id"],
+             "filename": item["filename"], "score": item["score"], "content": item["content"]}
+            for index, item in enumerate(results, start=1)
+        ]
+        if not results or results[0]["score"] < 0.05:
+            answer, answer_mode = "I could not find sufficiently relevant context in the indexed documents.", "insufficient_context"
+        elif not request.generate_answer:
+            answer, answer_mode = "Answer generation was disabled. Review the retrieved evidence below.", "retrieval_only"
+        else:
+            stage = perf_counter()
+            try:
+                answer = generate_grounded_answer(request.question, results)
+                answer_mode = "gemini"
+            except LLMNotConfiguredError:
+                answer, answer_mode = "Gemini API key is not configured. Add GEMINI_API_KEY to backend/.env to enable generation.", "llm_not_configured"
+            except LLMGenerationError as exc:
+                answer, answer_mode = str(exc), "llm_error"
+            finally:
+                timings["generation_ms"] = round((perf_counter() - stage) * 1000, 2)
+        trace = {"trace_id": trace_id, "question": request.question, "answer_mode": answer_mode,
+                 "retrieval_mode": retrieval_mode, "top_k": request.top_k,
+                 "timings": {**timings, "total_ms": round((perf_counter() - started) * 1000, 2)},
+                 "token_usage": token_usage, "retrieved_count": len(results), "error": None}
+        save_trace(trace)
+        return {"trace_id": trace_id, "timings": trace["timings"], "token_usage": token_usage,
+                "question": request.question, "answer": answer, "answer_mode": answer_mode,
+                "model": "gemini-2.5-flash" if answer_mode == "gemini" else None,
+                "retrieved_chunks": results, "sources": sources, "diagnostics": diagnostic,
+                "retrieval_mode": retrieval_mode}
+    except Exception as exc:
+        message = str(exc.detail if isinstance(exc, HTTPException) else exc)[:1000]
+        save_trace({"trace_id": trace_id, "question": request.question, "answer_mode": answer_mode,
+                    "retrieval_mode": retrieval_mode, "top_k": request.top_k,
+                    "timings": {**timings, "total_ms": round((perf_counter() - started) * 1000, 2)},
+                    "token_usage": token_usage, "retrieved_count": 0, "error": message})
+        raise
+
+
+@app.get("/api/traces")
+def get_recent_traces(limit: int = 30):
+    return {"traces": list_traces(limit)}
+
+
+@app.get("/api/traces/{trace_id}")
+def get_trace_detail(trace_id: str):
+    trace = get_trace(trace_id)
+    if trace is None:
+        raise HTTPException(status_code=404, detail="Trace not found.")
+    return {"trace": trace}
 
 
 @app.post("/api/evaluate")
