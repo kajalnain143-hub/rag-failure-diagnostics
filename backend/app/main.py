@@ -14,7 +14,7 @@ from pypdf import PdfReader
 
 from .database import get_all_chunks, get_documents, get_connection, init_db, save_document, create_database_backup
 from .diagnostics import diagnose, evaluate_retrieval
-from .llm import LLMGenerationError, LLMNotConfiguredError, generate_grounded_answer
+from .llm import LLMGenerationError, LLMNotConfiguredError, generate_grounded_answer, verify_live_api
 from .embeddings import EMBEDDING_MODEL, embed_query, embed_text
 from .failure_clinic import PATTERNS, diagnose_incident
 from .incident_schemas import IncidentDiagnosisRequest
@@ -49,6 +49,7 @@ def configured_cors_origins() -> list[str]:
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper(), format="%(message)s")
 logger = logging.getLogger("rag_api")
+GEMINI_LIVE_STATUS = {"status": "not_checked"}
 API_AUTH_TOKEN = os.getenv("API_AUTH_TOKEN", "").strip()
 API_RATE_LIMIT = int(os.getenv("API_RATE_LIMIT", "120"))
 API_RATE_WINDOW_SECONDS = int(os.getenv("API_RATE_WINDOW_SECONDS", "60"))
@@ -103,11 +104,14 @@ async def request_observability(request: Request, call_next):
 
 @app.on_event("startup")
 def startup():
+    global GEMINI_LIVE_STATUS
     init_db()
     init_experiment_store()
     init_trace_store()
     init_snapshot_store()
     init_incident_store()
+    GEMINI_LIVE_STATUS = verify_live_api()
+    logger.info(json.dumps({"event": "gemini_live_verification", **GEMINI_LIVE_STATUS}))
 
 
 def extract_text(filename: str, content: bytes) -> str:
@@ -133,6 +137,12 @@ def extract_text(filename: str, content: bytes) -> str:
 @app.get("/")
 def read_root():
     return {"message": "RAG Failure Diagnostics API is running.", "version": app.version, "docs": "/docs"}
+
+
+@app.get("/health/gemini")
+def gemini_health_check():
+    """Return the last startup live Gemini generation/embedding verification; never expose credentials."""
+    return GEMINI_LIVE_STATUS
 
 
 @app.get("/health")
