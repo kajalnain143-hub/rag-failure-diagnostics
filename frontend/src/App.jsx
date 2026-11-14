@@ -21,7 +21,7 @@ export default function App() {
     reference_answer: "Write the expected answer here.",
     k: 5
   }, null, 2));
-  const [benchmarkResult, setBenchmarkResult] = useState(null);
+  const [benchmarkResult, setBenchmarkResult] = useState(null);\n  const [comparisonResult, setComparisonResult] = useState(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [dashboardBusy, setDashboardBusy] = useState(false);
@@ -163,6 +163,45 @@ export default function App() {
     }
   }
 
+  async function compareStrategies() {
+    let testCase;
+    try {
+      testCase = JSON.parse(benchmarkCase);
+    } catch {
+      setMessage("Benchmark case must be valid JSON.");
+      return;
+    }
+    setDashboardBusy(true);
+    setMessage("");
+    setComparisonResult(null);
+    try {
+      const data = await apiRequest("/api/benchmark/compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(testCase)
+      });
+      setComparisonResult(data);
+      await Promise.all(Object.entries(data.comparison).map(([strategy, result]) =>
+        apiRequest("/api/experiments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: `Strategy comparison · ${strategy} · ${testCase.query_id}`,
+            config: { strategy, k: testCase.k || 5, query_id: testCase.query_id, mmr_diversity: testCase.mmr_diversity ?? 0.35 },
+            metrics: result.metrics,
+            notes: "Saved from the same-query TF-IDF vs hybrid vs MMR comparison."
+          })
+        })
+      ));
+      await loadExperiments();
+      setMessage(`Comparison complete. Best for this query: ${data.best_strategy}. All three runs saved.`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setDashboardBusy(false);
+    }
+  }
+
   async function refreshDashboard() {
     setDashboardBusy(true);
     try {
@@ -283,6 +322,23 @@ export default function App() {
           </form>
           {benchmarkResult && <div className="metric-grid">
             {Object.entries(benchmarkResult.metrics).filter(([key, value]) => typeof value === "number" && key !== "retrieved_count").map(([key, value]) => <div className="metric-card" key={key}><strong>{Number(value).toFixed(3)}</strong><span>{key.replaceAll("_", " ")}</span></div>)}
+          </div>}
+          <button className="secondary" onClick={compareStrategies} disabled={dashboardBusy}>
+            {dashboardBusy ? "Comparing..." : "Compare TF-IDF vs Hybrid vs MMR"}
+          </button>
+          {comparisonResult && <div className="subsection">
+            <div className="diagnostic">
+              <div><div className="eyebrow">BEST STRATEGY FOR THIS QUERY</div><strong>{comparisonResult.best_strategy.replaceAll("_", " ")}</strong></div>
+            </div>
+            <div className="table-wrap"><table className="experiment-table">
+              <thead><tr><th>Strategy</th><th>Recall@K</th><th>MRR</th><th>nDCG@K</th><th>Evidence coverage</th></tr></thead>
+              <tbody>{Object.entries(comparisonResult.comparison).map(([strategy, row]) => <tr key={strategy}>
+                <td><b>{strategy.replaceAll("_", " ")}</b>{strategy === comparisonResult.best_strategy && <small>Best for this query</small>}</td>
+                <td>{row.metrics.recall_at_k.toFixed(3)}</td><td>{row.metrics.mrr.toFixed(3)}</td>
+                <td>{row.metrics.ndcg_at_k.toFixed(3)}</td><td>{row.metrics.evidence_term_coverage.toFixed(3)}</td>
+              </tr>)}</tbody>
+            </table></div>
+            <p className="hint">{comparisonResult.selection_note} Results are valid only for this labeled query and current indexed corpus.</p>
           </div>}
           <p className="hint">Ranking metrics require manually labeled relevant chunks. Evidence-term coverage is lexical—not a semantic faithfulness score.</p>
         </div>
