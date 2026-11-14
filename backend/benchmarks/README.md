@@ -23,6 +23,22 @@ coverage. It does not claim semantic correctness or answer faithfulness.
 
 The corpus endpoint returns at most 500 chunks to keep responses bounded. Chunk IDs can change when documents are re-uploaded or the database is recreated, so create fresh labels after rebuilding the knowledge base. Do not use the starter example IDs as if they were real corpus IDs.
 
+## Validate a labeled dataset before running it
+
+After saving the response from `GET /api/benchmark/corpus` as `corpus.json`, validate your
+hand-labeled dataset before submitting it to the benchmark API:
+
+```bash
+cd backend
+python scripts/validate_benchmark_dataset.py --corpus corpus.json --dataset my_dataset.json
+```
+
+The validator checks required text fields, unique query IDs, non-empty integer gold
+chunk IDs, duplicate labels, cutoff values, and whether every gold chunk ID exists in
+the supplied corpus export. It exits with a non-zero status when it finds an issue.
+This catches stale IDs after a corpus rebuild, but it cannot decide whether a human
+relevance label or reference answer is factually correct.
+
 ## Retrieval strategy comparison
 
 The API also exposes `POST /api/benchmark/compare`. Submit the same labeled case
