@@ -8,6 +8,7 @@ from pypdf import PdfReader
 from .database import get_all_chunks, get_documents, init_db, save_document
 from .diagnostics import diagnose, evaluate_retrieval
 from .llm import LLMGenerationError, LLMNotConfiguredError, generate_grounded_answer
+from .embeddings import EMBEDDING_MODEL, embed_query, embed_text
 from .failure_clinic import PATTERNS, diagnose_incident
 from .incident_schemas import IncidentDiagnosisRequest
 from .rag_engine import retrieve, split_into_chunks
@@ -79,7 +80,7 @@ async def upload_document(file: UploadFile = File(...)):
     chunks = split_into_chunks(text)
     if not chunks:
         raise HTTPException(status_code=400, detail="No readable text was found in the document.")
-    document_id = save_document(filename, chunks)
+    embeddings = [embed_text(chunk) for chunk in chunks]\n    document_id = save_document(filename, chunks, embeddings, EMBEDDING_MODEL)
     return {"message": "Document uploaded and indexed successfully.", "document_id": document_id,
             "filename": filename, "chunk_count": len(chunks)}
 
@@ -89,7 +90,7 @@ def query_documents(request: QueryRequest):
     chunks = get_all_chunks()
     if not chunks:
         raise HTTPException(status_code=400, detail="Upload a document before asking a question.")
-    results = retrieve(request.question, chunks, request.top_k)
+    query_vector = embed_query(request.question)\n    results = retrieve(request.question, chunks, request.top_k, query_embedding=query_vector)
     diagnostic = diagnose(request.question, results)
     sources = [
         {"label": f"S{index}", "chunk_id": item["chunk_id"], "document_id": item["document_id"],
@@ -109,7 +110,7 @@ def query_documents(request: QueryRequest):
             answer, answer_mode = str(exc), "llm_error"
     return {"question": request.question, "answer": answer, "answer_mode": answer_mode,
             "model": "gemini-2.5-flash" if answer_mode == "gemini" else None,
-            "retrieved_chunks": results, "sources": sources, "diagnostics": diagnostic}
+            "retrieved_chunks": results, "sources": sources, "diagnostics": diagnostic, "retrieval_mode": results[0].get("retrieval_mode") if results else "none"}
 
 
 @app.post("/api/evaluate")
@@ -119,7 +120,7 @@ def evaluate(request: EvaluationRequest):
         raise HTTPException(status_code=400, detail="Upload a document before running evaluation.")
     results = retrieve(request.question, chunks, request.top_k)
     return {"evaluation": evaluate_retrieval(request.question, request.expected_answer, results),
-            "diagnostics": diagnose(request.question, results), "retrieved_chunks": results}
+            "diagnostics": diagnose(request.question, results), "retrieved_chunks": results,\n            "retrieval_mode": results[0].get("retrieval_mode") if results else "none"}
 
 
 
