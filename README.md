@@ -104,6 +104,16 @@ Example query body:
 
 Set generate_answer to false to isolate retrieval from generation.
 
+## Production configuration and safety
+
+The API reads comma-separated trusted browser origins from `CORS_ORIGINS`. The default permits only the local Vite origins. Wildcard origins are rejected because credentialed CORS must use explicit trusted origins. Set `LOG_LEVEL` to control structured request logging; logs include request ID, method, path, status, and duration, but intentionally omit request bodies and API keys.
+
+The API returns an `X-Request-ID` response header and basic browser security headers. `GET /health` now checks database connectivity and returns HTTP 503 if SQLite is unavailable. Upload reads are capped at 10 MB plus one byte before processing, and Windows-style path separators in uploaded filenames are normalized before storing the basename.
+
+For Docker, configure `CORS_ORIGINS`, `LOG_LEVEL`, and `VITE_API_URL` in the environment before building. `VITE_API_URL` is embedded in the frontend at build time; use the public browser-reachable API URL, not the internal Compose service hostname.
+
+These are baseline hardening measures, not a complete production security review. Authentication, authorization, rate limiting, secret management, TLS termination, and external monitoring still need to be configured before exposing the service publicly.
+
 ## Query observability
 
 Every `POST /api/query` response now includes a UUID `trace_id`, stage timings (`embedding_ms`, `retrieval_ms`, `generation_ms`, and `total_ms`), and a nullable `token_usage` field. Query traces are persisted in SQLite, including the retrieval/answer modes, top-k, retrieved chunk count, timestamp, and error details when a query fails.
