@@ -13,6 +13,8 @@ from .failure_clinic import PATTERNS, diagnose_incident
 from .incident_schemas import IncidentDiagnosisRequest
 from .rag_engine import retrieve, split_into_chunks
 from .schemas import EvaluationRequest, QueryRequest
+from .experiment_store import init_experiment_store, list_experiments, save_experiment
+from .evaluation_metrics import evaluate_case
 
 app = FastAPI(
     title="RAG Failure Diagnostics API",
@@ -31,6 +33,7 @@ app.add_middleware(
 @app.on_event("startup")
 def startup():
     init_db()
+    init_experiment_store()
 
 
 def extract_text(filename: str, content: bytes) -> str:
@@ -156,3 +159,42 @@ def diagnose_rag_incident(request: IncidentDiagnosisRequest):
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/experiments")
+def get_experiment_history(limit: int = 20):
+    """Return recent saved retrieval/evaluation experiment runs."""
+    return {"experiments": list_experiments(limit)}
+
+
+@app.post("/api/experiments")
+def create_experiment(payload: dict):
+    """Persist a named experiment configuration and its measured metrics."""
+    name = str(payload.get("name", "")).strip()
+    config = payload.get("config", {})
+    metrics = payload.get("metrics", {})
+    notes = str(payload.get("notes", ""))
+    if not name or not isinstance(config, dict) or not isinstance(metrics, dict):
+        raise HTTPException(status_code=400, detail="Provide a name plus object-valued config and metrics.")
+    try:
+        run_id = save_experiment(name, config, metrics, notes)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"id": run_id, "message": "Experiment saved."}
+
+
+@app.post("/api/benchmark/evaluate")
+def evaluate_benchmark_case(payload: dict):
+    """Evaluate retrieved chunks against a manually labeled benchmark case."""
+    required = ("query_id", "question", "relevant_chunk_ids", "reference_answer")
+    if any(key not in payload for key in required):
+        raise HTTPException(status_code=400, detail=f"Required fields: {', '.join(required)}")
+    if not isinstance(payload["relevant_chunk_ids"], list):
+        raise HTTPException(status_code=400, detail="relevant_chunk_ids must be a list.")
+    chunks = get_all_chunks()
+    if not chunks:
+        raise HTTPException(status_code=400, detail="Upload a document before running a benchmark.")
+    question = str(payload["question"])
+    results = retrieve(question, chunks, int(payload.get("k", 5)))
+    metrics = evaluate_case(payload, results)
+    return {"metrics": metrics, "retrieved_chunks": results}
