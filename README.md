@@ -104,6 +104,14 @@ Example query body:
 
 Set generate_answer to false to isolate retrieval from generation.
 
+## Query observability
+
+Every `POST /api/query` response now includes a UUID `trace_id`, stage timings (`embedding_ms`, `retrieval_ms`, `generation_ms`, and `total_ms`), and a nullable `token_usage` field. Query traces are persisted in SQLite, including the retrieval/answer modes, top-k, retrieved chunk count, timestamp, and error details when a query fails.
+
+Use `GET /api/traces?limit=30` for recent traces and `GET /api/traces/{trace_id}` for one trace. The frontend's Observability & Tracing panel displays recent timings and trace details.
+
+Token counts and monetary cost are currently unavailable because the generation path does not yet expose provider usage metadata to the trace layer. The UI deliberately reports this as unavailable instead of estimating or inventing costs. Stage timings are server-side wall-clock measurements, not provider billing metrics.
+
 ## Evaluation honesty
 
 The expected-answer coverage score measures lexical term overlap between the reference answer and retrieved context. It is not a semantic relevance score, faithfulness score, or hallucination detector. Gemini is instructed to ground answers in retrieved chunks and cite them, but generated citations still require evaluation.
@@ -117,16 +125,16 @@ The expected-answer coverage score measures lexical term overlap between the ref
 - [x] Initial automated unit tests
 - [x] Gemini-powered incident diagnostics clinic (adapted from Darpan Sharma's Apache-2.0-licensed reference; see THIRD_PARTY_NOTICES.md)
 - [x] Structured diagnosis validation and incident endpoint
-- [ ] Dense semantic embeddings and hybrid retrieval
-- [ ] Reranking and retrieval ablation experiments
-- [ ] Faithfulness and answer-relevance evaluation with curated benchmark
-- [ ] Persistent experiment runs and comparison dashboard
+- [x] Dense semantic embeddings and hybrid retrieval
+- [x] MMR reranking and retrieval strategy comparison
+- [x] Model-assisted faithfulness evaluation and labeled retrieval benchmark tooling
+- [x] Persistent experiment runs and comparison dashboard
 - [ ] PostgreSQL + pgvector storage option
-- [ ] Docker, CI workflow, deployment, and demo
+- [x] Docker and CI workflow configuration (execution still pending verification)\n- [ ] Deployment and public demo
 
 ## Project status
 
-**Active development — Phase 1 committed.** Repository changes have not yet been run in your Windows environment or against a live Gemini API key. Test results, live API behavior, and deployment will be reported only after verification.
+**Active development — retrieval evaluation, answer grounding, experiment tracking, and query observability implemented.** Repository changes have not yet been run in your Windows environment or against a live Gemini API key. Test results, live API behavior, and deployment will be reported only after verification.
 
 
 ## Docker
