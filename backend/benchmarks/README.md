@@ -98,6 +98,39 @@ the corpus and labels are held constant. Timing is an in-process measurement,
 not a production load test or provider-cost estimate.
 
 
+## MMR diversity tuning sweep
+
+Use `POST /api/benchmark/tune-mmr` to compare 2–7 unique MMR diversity values
+against the same current indexed corpus and manually labeled cases. The default
+values are `[0.0, 0.2, 0.35, 0.5, 0.7, 1.0]`; a request may override them.
+The endpoint accepts 1–50 labeled cases and runs `hybrid_mmr` once per value.
+Each run is saved as an experiment and references its immutable corpus/dataset
+snapshot.
+
+Example request:
+
+```json
+{
+  "dataset_name": "support-docs-v1",
+  "diversity_values": [0.0, 0.2, 0.35, 0.5, 0.7, 1.0],
+  "cases": [
+    {
+      "query_id": "refund-001",
+      "question": "How long do customers have to request a refund?",
+      "relevant_chunk_ids": [12],
+      "reference_answer": "Customers may request a refund within 30 days.",
+      "k": 5
+    }
+  ]
+}
+```
+
+The result ranks settings by the unweighted mean of Recall@K, MRR, nDCG@K, and
+lexical evidence coverage; p95 latency breaks ties. This is an empirical
+recommendation for the supplied labels and corpus, not a globally optimal
+parameter. The sweep makes embedding calls for every query/value combination,
+so start with a small dataset when using a free Gemini quota.
+
 ## Benchmark regression gates
 
 Use `POST /api/benchmark/regression` with `baseline_run_id`,
