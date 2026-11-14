@@ -88,11 +88,15 @@ def init_db():
                 FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE
             )
         """)
-        if not column_exists("chunks", "embedding_json"):
-            conn.execute("ALTER TABLE chunks ADD COLUMN embedding_json TEXT")
-        if not column_exists("chunks", "embedding_model"):
-            conn.execute("ALTER TABLE chunks ADD COLUMN embedding_model TEXT")
         conn.commit()
+    if not column_exists("chunks", "embedding_json"):
+        with get_connection() as migration_conn:
+            migration_conn.execute("ALTER TABLE chunks ADD COLUMN embedding_json TEXT")
+            migration_conn.commit()
+    if not column_exists("chunks", "embedding_model"):
+        with get_connection() as migration_conn:
+            migration_conn.execute("ALTER TABLE chunks ADD COLUMN embedding_model TEXT")
+            migration_conn.commit()
 
 
 def save_document(filename: str, chunks: list[str], embeddings: list[list[float] | None] | None = None,
