@@ -38,6 +38,7 @@ export default function App() {
   const [reportDatasetName, setReportDatasetName] = useState("my-rag-regression-suite");
   const [reportStrategy, setReportStrategy] = useState("hybrid");
   const [benchmarkReport, setBenchmarkReport] = useState(null);
+  const [replayBusy, setReplayBusy] = useState(false);
   const [qualityResult, setQualityResult] = useState(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -260,6 +261,26 @@ export default function App() {
       setMessage(error.message);
     } finally {
       setDashboardBusy(false);
+    }
+  }
+
+  async function replayBenchmarkSnapshot() {
+    if (!batchResult?.snapshot_id) return;
+    setReplayBusy(true);
+    setMessage("");
+    try {
+      const data = await apiRequest(`/api/benchmark/snapshots/${batchResult.snapshot_id}/replay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ strategies: Object.keys(batchResult.strategies) })
+      });
+      setBatchResult(data);
+      await loadExperiments();
+      setMessage("Snapshot replay completed using the saved corpus and labeled cases.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setReplayBusy(false);
     }
   }
 
@@ -535,6 +556,8 @@ export default function App() {
                 </div>
                 <p className="hint">Experiment #{row.experiment_id}</p>
               </div>)}
+              <p className="hint">Snapshot #{batchResult.snapshot_id} · corpus {batchResult.corpus_fingerprint?.slice(0, 12)}… · dataset {batchResult.dataset_fingerprint?.slice(0, 12)}…</p>
+              <button className="secondary compact" onClick={replayBenchmarkSnapshot} disabled={dashboardBusy || replayBusy}>{replayBusy ? "Replaying snapshot..." : "Replay saved snapshot"}</button>
               <p className="hint">{batchResult.metric_note}</p>
             </>}
           </div>
