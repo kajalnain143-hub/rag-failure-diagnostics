@@ -8,6 +8,8 @@ from pypdf import PdfReader
 from .database import get_all_chunks, get_documents, init_db, save_document
 from .diagnostics import diagnose, evaluate_retrieval
 from .llm import LLMGenerationError, LLMNotConfiguredError, generate_grounded_answer
+from .failure_clinic import PATTERNS, diagnose_incident
+from .incident_schemas import IncidentDiagnosisRequest
 from .rag_engine import retrieve, split_into_chunks
 from .schemas import EvaluationRequest, QueryRequest
 
@@ -118,3 +120,34 @@ def evaluate(request: EvaluationRequest):
     results = retrieve(request.question, chunks, request.top_k)
     return {"evaluation": evaluate_retrieval(request.question, request.expected_answer, results),
             "diagnostics": diagnose(request.question, results), "retrieved_chunks": results}
+
+
+
+@app.get("/api/diagnostics/patterns")
+def list_failure_patterns():
+    """Return the supported incident taxonomy for the diagnostics UI."""
+    return {"taxonomy_version": "1.0", "count": len(PATTERNS), "patterns": PATTERNS}
+
+
+@app.post("/api/diagnostics/incident")
+def diagnose_rag_incident(request: IncidentDiagnosisRequest):
+    """Classify a reported RAG/LLM incident and propose verifiable structural fixes."""
+    try:
+        diagnosis = diagnose_incident(
+            request.description,
+            logs=request.logs,
+            expected_behavior=request.expected_behavior,
+        )
+        return {
+            "incident": {
+                "description": request.description,
+                "expected_behavior": request.expected_behavior,
+            },
+            "diagnosis": diagnosis,
+        }
+    except LLMNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail="Gemini API key is not configured.") from exc
+    except LLMGenerationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
