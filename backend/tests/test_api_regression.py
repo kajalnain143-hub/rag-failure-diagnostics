@@ -140,3 +140,14 @@ def test_batch_benchmark_rejects_duplicate_query_ids(monkeypatch):
         response = test_client.post("/api/benchmark/run", json=payload)
     assert response.status_code == 400
     assert "unique" in response.json()["detail"]
+
+
+def test_batch_benchmark_rejects_non_integer_k(monkeypatch):
+    payload = {"cases": [
+        {"query_id": "q1", "question": "Question", "relevant_chunk_ids": [1],
+         "reference_answer": "Answer", "k": 2.5}
+    ]}
+    with client(monkeypatch) as test_client:
+        response = test_client.post("/api/benchmark/run", json=payload)
+    assert response.status_code == 400
+    assert "k must be an integer" in response.json()["detail"]
