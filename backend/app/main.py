@@ -28,7 +28,7 @@ from .benchmark_runner import ALLOWED_STRATEGIES, run_dataset
 from .benchmark_regression import compare_benchmark_runs
 from .benchmark_reports import build_benchmark_report, build_benchmark_insights, REPORT_METRICS
 from .benchmark_failure_analytics import analyze_benchmark_failures
-from .incident_store import init_incident_store, save_incident, list_incidents, get_incident, incident_pattern_summary
+from .incident_store import init_incident_store, save_incident, list_incidents, get_incident, incident_pattern_summary, incident_trace_analytics
 from .benchmark_snapshots import init_snapshot_store, create_snapshot, get_snapshot, SnapshotIntegrityError
 
 app = FastAPI(
@@ -252,7 +252,10 @@ def diagnose_rag_incident(request: IncidentDiagnosisRequest):
             "description": request.description,
             "expected_behavior": request.expected_behavior,
             "logs": request.logs,
+            "trace_id": request.trace_id,
         }
+        if request.trace_id and get_trace(request.trace_id) is None:
+            raise HTTPException(status_code=404, detail="Linked query trace was not found.")
         saved = save_incident(incident, diagnosis)
         return {"incident": incident, "diagnosis": diagnosis, "incident_id": saved["incident_id"],
                 "created_at": saved["created_at"]}
@@ -279,6 +282,11 @@ def get_incident_report(incident_id: str):
     if incident is None:
         raise HTTPException(status_code=404, detail="Incident report not found.")
     return {"incident": incident}
+
+
+@app.get("/api/diagnostics/incident-observability")
+def get_incident_observability():
+    return incident_trace_analytics()
 
 
 @app.get("/api/diagnostics/incidents.csv")
