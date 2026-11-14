@@ -355,7 +355,9 @@ def run_batch_benchmark(payload: dict):
         raise HTTPException(status_code=400, detail="dataset_name must contain 1–120 characters.")
     if not isinstance(cases, list) or not 1 <= len(cases) <= 100:
         raise HTTPException(status_code=400, detail="cases must be an array containing 1–100 labeled cases.")
-    if not isinstance(strategies, list) or not strategies or len(set(strategies)) != len(strategies):
+    if (not isinstance(strategies, list) or not strategies
+            or any(not isinstance(item, str) for item in strategies)
+            or len(set(strategies)) != len(strategies)):
         raise HTTPException(status_code=400, detail="strategies must be a non-empty array without duplicates.")
     if any(strategy not in ALLOWED_STRATEGIES for strategy in strategies):
         raise HTTPException(status_code=400, detail=f"strategies must be selected from: {', '.join(sorted(ALLOWED_STRATEGIES))}.")
