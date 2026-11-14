@@ -1,6 +1,6 @@
-"""SQLite-backed history for reproducible retrieval/evaluation experiments."""
+"""Persistent history for reproducible retrieval/evaluation experiments."""
 import json
-from .database import get_connection
+from .database import get_connection, USING_POSTGRES
 
 
 def init_experiment_store() -> None:
@@ -23,12 +23,14 @@ def save_experiment(name: str, config: dict, metrics: dict, notes: str = "") -> 
     if not clean_name:
         raise ValueError("Experiment name cannot be empty.")
     with get_connection() as conn:
-        cursor = conn.execute(
-            "INSERT INTO experiment_runs (name, config_json, metrics_json, notes) VALUES (?, ?, ?, ?)",
-            (clean_name[:120], json.dumps(config, sort_keys=True), json.dumps(metrics, sort_keys=True), notes[:2000]),
-        )
+        sql = "INSERT INTO experiment_runs (name, config_json, metrics_json, notes) VALUES (?, ?, ?, ?)"
+        values = (clean_name[:120], json.dumps(config, sort_keys=True), json.dumps(metrics, sort_keys=True), notes[:2000])
+        if USING_POSTGRES:
+            run_id = conn.execute(sql + " RETURNING id", values).fetchone()["id"]
+        else:
+            run_id = conn.execute(sql, values).lastrowid
         conn.commit()
-        return int(cursor.lastrowid)
+        return int(run_id)
 
 
 def list_experiments(limit: int = 50) -> list[dict]:
