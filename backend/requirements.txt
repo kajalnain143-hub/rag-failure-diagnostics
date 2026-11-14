@@ -3,3 +3,7 @@ uvicorn[standard]
 python-multipart
 pypdf
 scikit-learn
+google-genai
+python-dotenv
+pytest
+httpx
