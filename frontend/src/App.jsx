@@ -39,6 +39,7 @@ export default function App() {
   const [reportStrategy, setReportStrategy] = useState("hybrid");
   const [benchmarkReport, setBenchmarkReport] = useState(null);
   const [benchmarkInsights, setBenchmarkInsights] = useState(null);
+  const [failureAnalytics, setFailureAnalytics] = useState(null);
   const [replayBusy, setReplayBusy] = useState(false);
   const [qualityResult, setQualityResult] = useState(null);
   const [message, setMessage] = useState("");
@@ -312,6 +313,23 @@ export default function App() {
       const data = await apiRequest(`/api/benchmark/insights?${query.toString()}`);
       setBenchmarkInsights(data);
       setMessage(data.strategy_count ? "Benchmark intelligence generated." : "No comparable benchmark runs found yet.");
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setDashboardBusy(false);
+    }
+  }
+
+  async function generateFailureAnalytics() {
+    if (!reportDatasetName.trim()) return setMessage("Enter a dataset name for failure analytics.");
+    setDashboardBusy(true);
+    setMessage("");
+    setFailureAnalytics(null);
+    try {
+      const query = new URLSearchParams({ dataset_name: reportDatasetName.trim() });
+      const data = await apiRequest(`/api/benchmark/failure-analytics?${query.toString()}`);
+      setFailureAnalytics(data);
+      setMessage(`Failure analytics generated: ${data.signal_count} diagnostic signal(s).`);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -646,6 +664,33 @@ export default function App() {
             <p className="hint">{benchmarkInsights.note}</p>
           </>}
         </div>
+<div className="subsection">
+          <div className="eyebrow">RAG FAILURE ANALYTICS</div>
+          <h3>Failure pattern distribution</h3>
+          <p className="hint">Generate rule-based signals from the latest saved run per retrieval strategy.</p>
+          <button className="secondary compact" onClick={generateFailureAnalytics} disabled={dashboardBusy}>{dashboardBusy ? "Analyzing..." : "Analyze failure patterns"}</button>
+          {failureAnalytics && <>
+            <div className="metric-grid">
+              <div className="metric-card"><strong>{failureAnalytics.analyzed_strategy_count}</strong><span>Strategies analyzed</span></div>
+              <div className="metric-card"><strong>{failureAnalytics.signal_count}</strong><span>Diagnostic signals</span></div>
+              <div className="metric-card"><strong>{failureAnalytics.distribution.length}</strong><span>Patterns detected</span></div>
+            </div>
+            {failureAnalytics.distribution.length > 0 ? <div className="table-wrap"><table className="experiment-table">
+              <thead><tr><th>Pattern</th><th>Failure type</th><th>Signals</th></tr></thead>
+              <tbody>{failureAnalytics.distribution.map(row => <tr key={row.pattern_id}>
+                <td>{row.pattern_id}</td><td>{row.name}<small>{row.symptom}</small></td><td>{row.signal_count}</td>
+              </tr>)}</tbody>
+            </table></div> : <p className="hint">No rule-based failure signals were detected in the latest saved runs.</p>}
+            <h4>Evidence & recommended fixes</h4>
+            {failureAnalytics.signals.map((signal, index) => <div className="results" key={`${signal.run_id}-${signal.pattern_id}-${index}`}>
+              <strong>{signal.pattern_id} · {signal.severity.toUpperCase()} · {signal.strategy}</strong>
+              <p>{signal.evidence}</p><p className="recommendation">→ {signal.recommendation}</p>
+              <p className="hint">Experiment #{signal.run_id} · Snapshot #{signal.snapshot_id ?? "not recorded"}</p>
+            </div>)}
+            <p className="hint">{failureAnalytics.note}</p>
+          </>}
+        </div>
+
 <div className="subsection">
           <div className="eyebrow">AUTOMATED QUALITY GATE</div>
           <h3>Baseline vs current benchmark</h3>
