@@ -91,6 +91,8 @@ From backend with the virtual environment active:
 | POST | /api/documents/upload | Upload and index a document |
 | POST | /api/query | Retrieve, diagnose, and optionally generate a Gemini answer |
 | POST | /api/evaluate | Compare retrieved context with a reference answer |
+| GET | /api/diagnostics/patterns | List supported P01–P12 failure patterns |
+| POST | /api/diagnostics/incident | Diagnose a reported RAG/LLM incident with Gemini |
 
 Example query body:
 
