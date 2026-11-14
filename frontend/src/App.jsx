@@ -17,6 +17,8 @@ export default function App() {
   const [incidentSummary, setIncidentSummary] = useState({ total_incidents: 0, patterns: [], severity: {} });
   const [incidentPatternFilter, setIncidentPatternFilter] = useState("");
   const [incidentSeverityFilter, setIncidentSeverityFilter] = useState("");
+  const [incidentTraceId, setIncidentTraceId] = useState("");
+  const [incidentObservability, setIncidentObservability] = useState(null);
   const [experiments, setExperiments] = useState([]);
   const [benchmarkCase, setBenchmarkCase] = useState(JSON.stringify({
     query_id: "my-query-001",
@@ -433,6 +435,8 @@ export default function App() {
     const data = await apiRequest(`/api/diagnostics/incidents?${params.toString()}`);
     setIncidentHistory(data.incidents || []);
     setIncidentSummary(data.summary || { total_incidents: 0, patterns: [], severity: {} });
+    const observability = await apiRequest("/api/diagnostics/incident-observability");
+    setIncidentObservability(observability);
   }
 
   async function runIncidentDiagnosis(event) {
@@ -448,7 +452,7 @@ export default function App() {
       const data = await apiRequest("/api/diagnostics/incident", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: incident, logs: incidentLogs, expected_behavior: expectedBehavior })
+        body: JSON.stringify({ description: incident, logs: incidentLogs, expected_behavior: expectedBehavior, ...(incidentTraceId ? { trace_id: incidentTraceId } : {}) })
       });
       setIncidentResult(data.diagnosis);
       await loadIncidentHistory();
@@ -516,6 +520,7 @@ export default function App() {
           <textarea value={incident} onChange={e => setIncident(e.target.value)} placeholder="Example: Retrieved chunks say refunds are not allowed, but the assistant confidently tells users they can get a refund..." rows="4" />
           <textarea value={expectedBehavior} onChange={e => setExpectedBehavior(e.target.value)} placeholder="Expected behavior (optional)" rows="2" />
           <textarea value={incidentLogs} onChange={e => setIncidentLogs(e.target.value)} placeholder="Relevant logs / traces (optional)" rows="3" />
+          <label>Link related query trace (optional)<select value={incidentTraceId} onChange={e => setIncidentTraceId(e.target.value)}><option value="">No trace linked</option>{traces.map(trace => <option key={trace.trace_id} value={trace.trace_id}>{trace.trace_id.slice(0, 8)} · {trace.answer_mode} · {trace.question.slice(0, 70)}</option>)}</select></label>
           <button disabled={busy}>{busy ? "Diagnosing..." : "Run incident diagnosis"}</button>
         </form>
         {incidentResult && <div className="results">
@@ -528,6 +533,24 @@ export default function App() {
           <p className="hint">{incidentResult.disclaimer}</p>
         </div>}
       <div className="subsection">
+          <div className="eyebrow">TRACE CORRELATION</div>
+          <h3>Incident-to-query observability</h3>
+          {incidentObservability && <>
+            <div className="metric-grid">
+              <div className="metric-card"><strong>{incidentObservability.linked_count}</strong><span>Linked incidents</span></div>
+              <div className="metric-card"><strong>{incidentObservability.unlinked_count}</strong><span>Unlinked incidents</span></div>
+              <div className="metric-card"><strong>{incidentObservability.avg_total_ms == null ? "—" : incidentObservability.avg_total_ms.toFixed(1) + " ms"}</strong><span>Average linked latency</span></div>
+              <div className="metric-card"><strong>{incidentObservability.p95_total_ms == null ? "—" : incidentObservability.p95_total_ms.toFixed(1) + " ms"}</strong><span>p95 linked latency</span></div>
+            </div>
+            <h4>Breakdown by answer mode</h4>
+            {incidentObservability.by_answer_mode.length ? <div className="table-wrap"><table className="experiment-table"><thead><tr><th>Answer mode</th><th>Incidents</th><th>Avg latency</th><th>Trace errors</th></tr></thead><tbody>{incidentObservability.by_answer_mode.map(row => <tr key={row.value}><td>{row.value}</td><td>{row.incident_count}</td><td>{row.avg_total_ms} ms</td><td>{row.error_count}</td></tr>)}</tbody></table></div> : <p className="hint">No linked trace data yet.</p>}
+            <h4>Breakdown by retrieval mode</h4>
+            {incidentObservability.by_retrieval_mode.length ? <div className="table-wrap"><table className="experiment-table"><thead><tr><th>Retrieval mode</th><th>Incidents</th><th>Avg latency</th><th>Trace errors</th></tr></thead><tbody>{incidentObservability.by_retrieval_mode.map(row => <tr key={row.value}><td>{row.value}</td><td>{row.incident_count}</td><td>{row.avg_total_ms} ms</td><td>{row.error_count}</td></tr>)}</tbody></table></div> : null}
+            <p className="hint">{incidentObservability.note}</p>
+          </>}
+        </div>
+
+<div className="subsection">
           <div className="eyebrow">PERSISTENT INCIDENT INTELLIGENCE</div>
           <h3>Incident history & pattern trends</h3>
           <div className="metric-grid">
