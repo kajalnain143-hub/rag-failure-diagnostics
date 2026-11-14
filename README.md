@@ -15,6 +15,7 @@ A full-stack RAG workbench focused on diagnosing retrieval and answer-generation
 - Baseline lexical reference-answer coverage metric
 - Gemini-powered incident triage based on a 12-pattern RAG/LLM failure taxonomy (P01–P12)
 - Structured diagnosis output: primary/secondary pattern, severity, confidence, reasoning, missing evidence, minimal fix, and verification steps
+- Persistent SQLite incident history with P01–P12 and severity filters, pattern/severity summaries, detail lookup, and CSV export
 - Strict validation of model-generated JSON before returning a diagnosis
 - Third-party attribution and Apache 2.0 license notice for the adapted clinic taxonomy
 - Pytest tests for chunking, retrieval, diagnostics, and evaluation
@@ -92,7 +93,10 @@ The regression suite covers SQLite persistence, chunking and retrieval, benchmar
 | GET | /api/documents | List indexed documents |
 | POST | /api/documents/upload | Upload and index a document |
 | POST | /api/query | Retrieve, diagnose, and optionally generate a Gemini answer |
-| POST | /api/evaluate | Compare retrieved context with a reference answer |\n| GET | /api/diagnostics/patterns | List supported P01–P12 failure patterns |\n| POST | /api/diagnostics/incident | Diagnose a reported RAG/LLM incident with Gemini |
+| POST | /api/evaluate | Compare retrieved context with a reference answer |\n| GET | /api/diagnostics/patterns | List supported P01–P12 failure patterns |\n| POST | /api/diagnostics/incident | Diagnose and persist a reported RAG/LLM incident with Gemini |
+| GET | /api/diagnostics/incidents | List and filter saved incident history with pattern/severity summary |
+| GET | /api/diagnostics/incidents/{incident_id} | Retrieve one saved incident report |
+| GET | /api/diagnostics/incidents.csv | Export filtered incident history as CSV |
 | GET | /api/diagnostics/patterns | List supported P01–P12 failure patterns |
 | POST | /api/diagnostics/incident | Diagnose a reported RAG/LLM incident with Gemini |
 
@@ -137,6 +141,7 @@ The expected-answer coverage score measures lexical term overlap between the ref
 - [x] Initial automated unit tests
 - [x] Gemini-powered incident diagnostics clinic (adapted from Darpan Sharma's Apache-2.0-licensed reference; see THIRD_PARTY_NOTICES.md)
 - [x] Structured diagnosis validation and incident endpoint
+- [x] Persistent incident history, pattern/severity filters, summaries, and CSV export
 - [x] Dense semantic embeddings and hybrid retrieval
 - [x] MMR reranking and retrieval strategy comparison
 - [x] Model-assisted faithfulness evaluation and labeled retrieval benchmark tooling
