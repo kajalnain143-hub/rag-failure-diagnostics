@@ -33,6 +33,13 @@ Without a token, public health/root endpoints should return 200 and protected AP
 
 The current Render Blueprint config points SQLite to `/tmp/rag_diagnostics.db`. On an ephemeral filesystem, uploaded documents, experiments, traces, and incidents may disappear on restart/redeploy. Do not use this free deployment as durable storage. For persistent portfolio demos, attach a persistent disk (if available on the selected plan) or migrate to managed PostgreSQL/object storage and configure backups.
 
+## Data backup check
+
+- [ ] With the API bearer token, download `/api/admin/database-backup` and verify the file begins with the SQLite database header.
+- [ ] Store the backup in a private location with restricted access; it contains the complete indexed corpus and operational history.
+- [ ] Repeat backups before every Render restart/redeploy while the database remains on ephemeral `/tmp` storage.
+- [ ] Test restore procedure on a separate copy and never overwrite the only backup.
+
 ## Report actual results
 
 Record the Render deployment ID, commit SHA, timestamp, smoke-test output, CI run URL, and whether a Gemini-backed query succeeded. Do not label the project production-ready until these checks pass.
