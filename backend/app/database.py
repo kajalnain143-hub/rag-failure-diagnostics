@@ -1,7 +1,7 @@
-import sqlite3
+import os\nimport sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parents[1] / "rag_diagnostics.db"
+DB_PATH = Path(os.getenv("RAG_DB_PATH", str(Path(__file__).resolve().parents[1] / "rag_diagnostics.db")))
 
 
 def get_connection():
