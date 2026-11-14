@@ -11,7 +11,7 @@ from collections.abc import Iterable
 
 
 def _terms(text: str) -> set[str]:
-    return set(re.findall(r"\\b[a-zA-Z0-9]{2,}\\b", (text or "").lower()))
+    return set(re.findall(r"\b[a-zA-Z0-9]{2,}\b", (text or "").lower()))
 
 
 def recall_at_k(retrieved_ids: list[int | str], relevant_ids: Iterable[int | str], k: int) -> float:
