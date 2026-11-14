@@ -16,6 +16,7 @@ A full-stack RAG workbench focused on diagnosing retrieval and answer-generation
 - Gemini-powered incident triage based on a 12-pattern RAG/LLM failure taxonomy (P01–P12)
 - Structured diagnosis output: primary/secondary pattern, severity, confidence, reasoning, missing evidence, minimal fix, and verification steps
 - Persistent SQLite incident history with P01–P12 and severity filters, pattern/severity summaries, detail lookup, and CSV export
+- Explicit incident-to-query trace linking with linked latency and answer/retrieval-mode breakdowns
 - Strict validation of model-generated JSON before returning a diagnosis
 - Third-party attribution and Apache 2.0 license notice for the adapted clinic taxonomy
 - Pytest tests for chunking, retrieval, diagnostics, and evaluation
@@ -97,6 +98,7 @@ The regression suite covers SQLite persistence, chunking and retrieval, benchmar
 | GET | /api/diagnostics/incidents | List and filter saved incident history with pattern/severity summary |
 | GET | /api/diagnostics/incidents/{incident_id} | Retrieve one saved incident report |
 | GET | /api/diagnostics/incidents.csv | Export filtered incident history as CSV |
+| GET | /api/diagnostics/incident-observability | Summarize latency and answer/retrieval modes for explicitly linked incidents |
 | GET | /api/diagnostics/patterns | List supported P01–P12 failure patterns |
 | POST | /api/diagnostics/incident | Diagnose a reported RAG/LLM incident with Gemini |
 
@@ -142,6 +144,7 @@ The expected-answer coverage score measures lexical term overlap between the ref
 - [x] Gemini-powered incident diagnostics clinic (adapted from Darpan Sharma's Apache-2.0-licensed reference; see THIRD_PARTY_NOTICES.md)
 - [x] Structured diagnosis validation and incident endpoint
 - [x] Persistent incident history, pattern/severity filters, summaries, and CSV export
+- [x] Incident-to-query trace linking and descriptive observability correlation
 - [x] Dense semantic embeddings and hybrid retrieval
 - [x] MMR reranking and retrieval strategy comparison
 - [x] Model-assisted faithfulness evaluation and labeled retrieval benchmark tooling
