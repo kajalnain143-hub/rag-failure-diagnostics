@@ -1,4 +1,5 @@
-from io import BytesIO
+from io import BytesIO, StringIO
+import csv
 from pathlib import Path
 import json
 import logging
@@ -8,6 +9,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pypdf import PdfReader
 
 from .database import get_all_chunks, get_documents, get_connection, init_db, save_document
@@ -24,6 +26,7 @@ from .answer_quality import context_precision_recall, evaluate_answer_grounding
 from .trace_store import init_trace_store, save_trace, list_traces, get_trace
 from .benchmark_runner import ALLOWED_STRATEGIES, run_dataset
 from .benchmark_regression import compare_benchmark_runs
+from .benchmark_reports import build_benchmark_report, REPORT_METRICS
 
 app = FastAPI(
     title="RAG Failure Diagnostics API",
@@ -419,6 +422,35 @@ def benchmark_regression_check(payload: dict):
         return compare_benchmark_runs(runs[baseline_id], runs[current_id], float(tolerance))
     except (KeyError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/benchmark/report")
+def benchmark_report(dataset_name: str, strategy: str):
+    """Return historical metrics and trends for one dataset/strategy pair."""
+    if not dataset_name.strip() or len(dataset_name) > 120:
+        raise HTTPException(status_code=400, detail="dataset_name must contain 1–120 characters.")
+    if strategy not in ALLOWED_STRATEGIES:
+        raise HTTPException(status_code=400, detail=f"strategy must be one of: {', '.join(sorted(ALLOWED_STRATEGIES))}.")
+    report = build_benchmark_report(list_experiments(100), dataset_name, strategy)
+    if not report["run_count"]:
+        raise HTTPException(status_code=404, detail="No batch benchmark history found for this dataset and strategy.")
+    return report
+
+
+@app.get("/api/benchmark/report.csv")
+def benchmark_report_csv(dataset_name: str, strategy: str):
+    """Download historical benchmark metrics as CSV."""
+    report = benchmark_report(dataset_name, strategy)
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["run_id", "created_at", "dataset_name", "strategy", "case_count", *REPORT_METRICS])
+    for run in report["history"]:
+        writer.writerow([run["run_id"], run["created_at"], report["dataset_name"],
+                         report["strategy"], run["case_count"],
+                         *[run["metrics"][metric] for metric in REPORT_METRICS]])
+    filename = f"benchmark-{dataset_name}-{strategy}.csv".replace(" ", "-")
+    return Response(content=output.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @app.post("/api/quality/evaluate")
