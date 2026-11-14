@@ -116,11 +116,11 @@ Set generate_answer to false to isolate retrieval from generation.
 
 The API reads comma-separated trusted browser origins from `CORS_ORIGINS`. The default permits only the local Vite origins. Wildcard origins are rejected because credentialed CORS must use explicit trusted origins. Set `LOG_LEVEL` to control structured request logging; logs include request ID, method, path, status, and duration, but intentionally omit request bodies and API keys.
 
-The API returns an `X-Request-ID` response header and basic browser security headers. `GET /health` now checks database connectivity and returns HTTP 503 if SQLite is unavailable. Upload reads are capped at 10 MB plus one byte before processing, and Windows-style path separators in uploaded filenames are normalized before storing the basename.
+The API returns an `X-Request-ID` response header and basic browser security headers. When `API_AUTH_TOKEN` is configured, every `/api/` route requires `Authorization: Bearer <token>`; the dashboard provides a session-only token field. `/health` remains public for container readiness. API rate limiting is process-local and keyed by the direct client IP. `GET /health` now checks database connectivity and returns HTTP 503 if SQLite is unavailable. Upload reads are capped at 10 MB plus one byte before processing, and Windows-style path separators in uploaded filenames are normalized before storing the basename.
 
 For Docker, configure `CORS_ORIGINS`, `LOG_LEVEL`, and `VITE_API_URL` in the environment before building. `VITE_API_URL` is embedded in the frontend at build time; use the public browser-reachable API URL, not the internal Compose service hostname.
 
-These are baseline hardening measures, not a complete production security review. Authentication, authorization, rate limiting, secret management, TLS termination, and external monitoring still need to be configured before exposing the service publicly.
+These are baseline hardening measures, not a complete production security review. Bearer-token API authentication can be enabled with API_AUTH_TOKEN; an in-memory per-process, per-client fixed-window rate limit is configurable with API_RATE_LIMIT and API_RATE_WINDOW_SECONDS. Set a strong random token before exposing the API. The limiter is not distributed across workers/replicas; use a gateway or shared store for multi-instance production. TLS termination, managed secret storage, persistent abuse monitoring, and a full security review are still required.
 
 ## Query observability
 
@@ -157,7 +157,8 @@ The expected-answer coverage score measures lexical term overlap between the ref
 - [x] Batch dataset benchmarking with latency summaries
 - [x] Benchmark regression gates for comparable saved runs
 - [ ] PostgreSQL + pgvector storage option
-- [x] Docker and CI workflow configuration (execution still pending verification)\n- [ ] Deployment and public demo
+- [x] Docker and CI workflow configuration (execution still pending verification)
+- [x] Optional bearer-token API authentication and configurable process-local rate limiting\n- [ ] Deployment and public demo
 
 ## Project status
 
