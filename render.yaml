@@ -27,10 +27,10 @@ services:
       - key: GEMINI_EMBEDDING_MODEL
         value: gemini-embedding-001
       - key: CORS_ORIGINS
-        value: https://rag-failure-diagnostics-web-kajal.onrender.com
+        value: https://rag-failure-diagnostics-web-live.onrender.com,https://rag-failure-diagnostics-web-kajal.onrender.com
 
   - type: web
-    name: rag-failure-diagnostics-web-kajal
+    name: rag-failure-diagnostics-web-live
     runtime: static
     buildCommand: cd frontend && npm install --no-audit --no-fund && npm run build
     staticPublishPath: ./frontend/dist
