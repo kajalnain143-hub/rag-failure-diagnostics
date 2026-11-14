@@ -621,6 +621,31 @@ export default function App() {
           </>}
         </div>
 <div className="subsection">
+          <div className="eyebrow">BENCHMARK INTELLIGENCE</div>
+          <h3>Strategy scorecards & recommendations</h3>
+          <p className="hint">Analyze the latest TF-IDF, Hybrid, and Hybrid MMR runs for this dataset. Recommendations are only produced when latest runs share the same snapshot fingerprints and case count.</p>
+          <button className="secondary compact" onClick={generateBenchmarkInsights} disabled={dashboardBusy}>{dashboardBusy ? "Analyzing..." : "Generate benchmark insights"}</button>
+          {benchmarkInsights && <>
+            {benchmarkInsights.best_strategy && <div className="diagnostic">
+              <div><div className="eyebrow">HIGHEST QUALITY SCORE</div><strong>{benchmarkInsights.best_strategy.replaceAll("_", " ").toUpperCase()}</strong></div>
+              <div className="score">{(benchmarkInsights.strategies.find(row => row.strategy === benchmarkInsights.best_strategy)?.quality_score ?? 0).toFixed(3)}<small>mean quality score</small></div>
+            </div>}
+            {!benchmarkInsights.comparable && <p className="issue">Strategy runs are not comparable yet. Run all strategies on the same saved snapshot.</p>}
+            {benchmarkInsights.strategies.length > 0 && <div className="table-wrap"><table className="experiment-table">
+              <thead><tr><th>Strategy</th><th>Quality score</th><th>Recall@K</th><th>MRR</th><th>nDCG@K</th><th>Evidence</th><th>p95 latency</th></tr></thead>
+              <tbody>{benchmarkInsights.strategies.map(row => <tr key={row.strategy}>
+                <td>{row.strategy.replaceAll("_", " ")}</td><td>{row.quality_score.toFixed(3)}</td>
+                <td>{row.metrics.recall_at_k.toFixed(3)}</td><td>{row.metrics.mrr.toFixed(3)}</td>
+                <td>{row.metrics.ndcg_at_k.toFixed(3)}</td><td>{row.metrics.evidence_term_coverage.toFixed(3)}</td>
+                <td>{row.metrics.latency_p95_ms.toFixed(2)} ms</td>
+              </tr>)}</tbody>
+            </table></div>}
+            <h4>Recommendations</h4>
+            {benchmarkInsights.recommendations.map((item, index) => <p className="recommendation" key={index}>→ {item}</p>)}
+            <p className="hint">{benchmarkInsights.note}</p>
+          </>}
+        </div>
+<div className="subsection">
           <div className="eyebrow">AUTOMATED QUALITY GATE</div>
           <h3>Baseline vs current benchmark</h3>
           <p className="hint">Compare two saved batch runs from the same dataset, strategy and case count. A quality metric is flagged when it drops by more than 0.05 (5 percentage points).</p>
