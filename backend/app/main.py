@@ -68,7 +68,7 @@ app.add_middleware(
 async def request_observability(request: Request, call_next):
     request_id = str(uuid4())
     started = perf_counter()
-    if request.url.path.startswith("/api/"):
+    if request.url.path.startswith("/api/") and request.method != "OPTIONS":
         if not valid_bearer_token(request.headers.get("Authorization"), API_AUTH_TOKEN):
             return JSONResponse(status_code=401, content={"detail": "A valid Bearer API token is required."},
                                 headers={"WWW-Authenticate": "Bearer", "X-Request-ID": request_id})
