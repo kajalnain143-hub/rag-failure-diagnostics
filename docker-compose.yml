@@ -4,6 +4,8 @@ services:
       context: ./backend
     env_file:
       - ./backend/.env
+    environment:
+      RAG_DB_PATH: /app/data/rag_diagnostics.db
     ports:
       - "8000:8000"
     volumes:
