@@ -17,3 +17,16 @@ button{border:0;border-radius:10px;padding:12px 18px;background:#6f9df3;color:#0
 .chunk{border:1px solid #2a3b53;border-radius:10px;padding:14px;margin:10px 0}.chunk div{display:flex;justify-content:space-between;gap:10px;font-size:12px}.chunk p{margin-bottom:0}
 .evaluation strong{font-size:30px;color:#8fb3ff;display:block}.evaluation span{font-size:13px;color:#d6e2f4}footer{text-align:center;color:#71829b;font-size:12px;padding:30px 0}
 @media(max-width:600px){.shell{padding-top:30px}.panel{padding:18px}.upload-row button{width:100%}}
+
+.subsection{border-top:1px solid #2a3b53;margin-top:26px;padding-top:22px}.code-input{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;white-space:pre;tab-size:2}
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:12px;margin:18px 0}
+.metric-card{background:#0c1727;border:1px solid #2b3e59;border-radius:12px;padding:16px;min-width:0}
+.metric-card strong{display:block;font-family:'Space Grotesk',sans-serif;font-size:25px;color:#91b4ff;overflow-wrap:anywhere}
+.metric-card span{display:block;color:#9eafc7;font-size:11px;margin-top:6px;text-transform:capitalize}
+.compact{padding:9px 13px;font-size:12px}.empty-state{border:1px dashed #40516b;border-radius:12px;padding:22px;color:#9eafc7;font-size:13px;text-align:center;margin-top:16px}
+.table-wrap{overflow-x:auto;margin-top:16px}.experiment-table{width:100%;border-collapse:collapse;font-size:12px;min-width:680px}
+.experiment-table th,.experiment-table td{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid #2a3b53}
+.experiment-table th{color:#8fb3ff;font-size:10px;letter-spacing:1px;text-transform:uppercase}
+.experiment-table td{color:#c4d0e1;max-width:260px}.experiment-table td small{display:block;color:#8295af;margin-top:5px}
+.experiment-table code{white-space:normal;overflow-wrap:anywhere;color:#a9c6f8;font-size:11px}
+@media(max-width:600px){.section-heading{gap:12px;align-items:flex-start}.section-heading .compact{white-space:nowrap}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
