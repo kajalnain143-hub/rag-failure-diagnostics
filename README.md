@@ -188,3 +188,8 @@ The current ranking is a baseline hybrid ranker, not a learned reranker. Scores 
 - The incident diagnosis is LLM-assisted hypothesis generation, not verified root-cause analysis.
 - Reference-answer coverage remains lexical; a curated benchmark and faithfulness evaluation are still required.
 - Docker and CI configuration are committed but must pass local/remote builds before being described as verified.
+
+
+## Deployment verification
+
+After Render marks both services Live, follow [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md). A standard-library smoke test is available at `scripts/smoke_test.py`; it checks public health endpoints and confirms that protected API endpoints require the configured bearer token. The smoke test has not been run against the live deployment yet.
