@@ -72,3 +72,16 @@ API cannot independently verify corpus identity. This is a quality regression
 gate, not a claim that the benchmark labels are correct or that semantic answer
 faithfulness has been proven. The endpoint looks up runs among the latest 100
 saved experiments.
+
+
+## Historical reports and CSV export
+
+Use `GET /api/benchmark/report?dataset_name=...&strategy=...` to retrieve
+the saved batch-run history and first-to-latest trends for ranking quality and
+latency metrics. Download the same history with
+`GET /api/benchmark/report.csv?dataset_name=...&strategy=...`.
+
+Reports include up to the latest 100 saved experiment records available from
+the experiment store. Runs are filtered to the exact dataset and strategy.
+Interpret trends only when the indexed corpus, relevance labels, and benchmark
+settings were held constant; corpus identity is not currently fingerprinted.
