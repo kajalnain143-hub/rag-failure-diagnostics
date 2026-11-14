@@ -22,6 +22,7 @@ from .experiment_store import init_experiment_store, list_experiments, save_expe
 from .evaluation_metrics import aggregate_metrics, evaluate_case
 from .answer_quality import context_precision_recall, evaluate_answer_grounding
 from .trace_store import init_trace_store, save_trace, list_traces, get_trace
+from .benchmark_runner import ALLOWED_STRATEGIES, run_dataset
 
 app = FastAPI(
     title="RAG Failure Diagnostics API",
@@ -341,6 +342,58 @@ def compare_retrieval_strategies(payload: dict):
     except (TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
+
+@app.post("/api/benchmark/run")
+def run_batch_benchmark(payload: dict):
+    """Run a bounded labeled dataset across one or more retrieval strategies."""
+    dataset_name = str(payload.get("dataset_name", "unnamed-dataset")).strip()
+    cases = payload.get("cases")
+    strategies = payload.get("strategies", ["tfidf", "hybrid", "hybrid_mmr"])
+    diversity = payload.get("mmr_diversity", 0.35)
+    if not dataset_name or len(dataset_name) > 120:
+        raise HTTPException(status_code=400, detail="dataset_name must contain 1–120 characters.")
+    if not isinstance(cases, list) or not 1 <= len(cases) <= 100:
+        raise HTTPException(status_code=400, detail="cases must be an array containing 1–100 labeled cases.")
+    if not isinstance(strategies, list) or not strategies or len(set(strategies)) != len(strategies):
+        raise HTTPException(status_code=400, detail="strategies must be a non-empty array without duplicates.")
+    if any(strategy not in ALLOWED_STRATEGIES for strategy in strategies):
+        raise HTTPException(status_code=400, detail=f"strategies must be selected from: {', '.join(sorted(ALLOWED_STRATEGIES))}.")
+    if isinstance(diversity, bool) or not isinstance(diversity, (int, float)) or not 0 <= diversity <= 1:
+        raise HTTPException(status_code=400, detail="mmr_diversity must be between 0 and 1.")
+    seen_ids = set()
+    clean_cases = []
+    for index, case in enumerate(cases):
+        if not isinstance(case, dict):
+            raise HTTPException(status_code=400, detail=f"Case {index + 1} must be an object.")
+        query_id, question = case.get("query_id"), case.get("question")
+        relevant = case.get("relevant_chunk_ids")
+        reference = case.get("reference_answer")
+        if not isinstance(query_id, str) or not query_id.strip() or query_id in seen_ids:
+            raise HTTPException(status_code=400, detail=f"Case {index + 1} needs a unique non-empty query_id.")
+        if not isinstance(question, str) or not question.strip() or len(question) > 2000:
+            raise HTTPException(status_code=400, detail=f"Case {query_id} needs a question of 1–2000 characters.")
+        if not isinstance(relevant, list) or not relevant or any(isinstance(item, bool) or not isinstance(item, int) for item in relevant):
+            raise HTTPException(status_code=400, detail=f"Case {query_id} needs a non-empty integer relevant_chunk_ids array.")
+        if not isinstance(reference, str) or not reference.strip():
+            raise HTTPException(status_code=400, detail=f"Case {query_id} needs a non-empty reference_answer.")
+        try:
+            k = int(case.get("k", 5))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail=f"Case {query_id}: k must be an integer from 1 to 10.")
+        if isinstance(case.get("k", 5), bool) or not 1 <= k <= 10:
+            raise HTTPException(status_code=400, detail=f"Case {query_id}: k must be an integer from 1 to 10.")
+        seen_ids.add(query_id)
+        clean_cases.append({"query_id": query_id, "question": question.strip(),
+                            "relevant_chunk_ids": relevant, "reference_answer": reference, "k": k})
+    chunks = get_all_chunks()
+    if not chunks:
+        raise HTTPException(status_code=400, detail="Upload documents before running a batch benchmark.")
+    try:
+        return run_dataset(dataset_name, clean_cases, strategies, chunks,
+                           embed_query, retrieve, save_experiment, float(diversity))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/quality/evaluate")
