@@ -21,6 +21,9 @@ def build_benchmark_report(runs: list[dict], dataset_name: str, strategy: str) -
             "metrics": {key: round(float(run["metrics"][key]), 4) for key in REPORT_METRICS},
             "case_count": run["config"].get("case_count"),
             "mmr_diversity": run["config"].get("mmr_diversity"),
+            "snapshot_id": run["config"].get("snapshot_id"),
+            "corpus_fingerprint": run["config"].get("corpus_fingerprint"),
+            "dataset_fingerprint": run["config"].get("dataset_fingerprint"),
         })
     trends = {}
     for metric in REPORT_METRICS:
@@ -30,4 +33,4 @@ def build_benchmark_report(runs: list[dict], dataset_name: str, strategy: str) -
                           "delta": round(values[-1] - values[0], 4) if len(values) > 1 else 0.0}
     return {"dataset_name": dataset_name, "strategy": strategy, "run_count": len(history),
             "history": history, "trends": trends,
-            "note": "Historical runs are comparable only when corpus contents, labels, and benchmark settings were held constant. Corpus identity is not fingerprinted."}
+            "note": "Each run references a stored corpus and labeled-dataset snapshot. Replay a snapshot ID to reproduce benchmark inputs; provider versions and timings may still vary."}
