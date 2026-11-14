@@ -38,3 +38,21 @@ faithfulness estimate plus supported and unsupported claims. This is an
 LLM-as-a-judge signal: it can make mistakes and must not be presented as a
 human-verified hallucination verdict. The context precision/recall values are
 only as reliable as the supplied relevance labels.
+
+
+## Batch dataset benchmarking
+
+Use `POST /api/benchmark/run` to execute 1–100 labeled cases against selected
+strategies (`tfidf`, `hybrid`, `hybrid_mmr`). The request contains a
+`dataset_name`, a `cases` array using the schema above, and an optional
+`strategies` array and `mmr_diversity` value. Each strategy returns per-query
+retrieved chunk IDs, Recall@K, MRR, nDCG@K, lexical evidence coverage, and measured
+embedding/retrieval/total latency. Aggregate results include mean ranking metrics
+and average, p50, and p95 latency. One experiment-history record is saved per
+strategy.
+
+All cases must use real integer chunk IDs from the currently indexed corpus.
+The benchmark does not create an isolated corpus snapshot; re-running after
+changing indexed documents may produce different results. Compare runs only when
+the corpus and labels are held constant. Timing is an in-process measurement,
+not a production load test or provider-cost estimate.
