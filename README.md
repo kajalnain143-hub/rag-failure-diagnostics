@@ -13,6 +13,10 @@ A full-stack RAG workbench focused on diagnosing retrieval and answer-generation
 - Return source metadata, retrieval scores, and answer-generation status
 - Disable generation to inspect retrieval independently
 - Baseline lexical reference-answer coverage metric
+- Gemini-powered incident triage based on a 12-pattern RAG/LLM failure taxonomy (P01–P12)
+- Structured diagnosis output: primary/secondary pattern, severity, confidence, reasoning, missing evidence, minimal fix, and verification steps
+- Strict validation of model-generated JSON before returning a diagnosis
+- Third-party attribution and Apache 2.0 license notice for the adapted clinic taxonomy
 - Pytest tests for chunking, retrieval, diagnostics, and evaluation
 
 > Source labels improve traceability but do not guarantee factual correctness. The current retrieval and reference-answer metrics are lexical baselines, not semantic relevance or hallucination detection.
@@ -109,6 +113,8 @@ The expected-answer coverage score measures lexical term overlap between the ref
 - [x] Initial retrieval diagnostics and lexical evaluation
 - [x] Gemini grounded answer generation and source metadata
 - [x] Initial automated unit tests
+- [x] Gemini-powered incident diagnostics clinic (adapted from Darpan Sharma's Apache-2.0-licensed reference; see THIRD_PARTY_NOTICES.md)
+- [x] Structured diagnosis validation and incident endpoint
 - [ ] Dense semantic embeddings and hybrid retrieval
 - [ ] Reranking and retrieval ablation experiments
 - [ ] Faithfulness and answer-relevance evaluation with curated benchmark
