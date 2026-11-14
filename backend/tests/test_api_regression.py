@@ -98,3 +98,45 @@ def test_query_without_documents_returns_400_and_persists_error_trace(monkeypatc
     assert response.status_code == 400
     assert saved[0]["error"] == "Upload a document before asking a question."
     assert saved[0]["answer_mode"] == "error"
+
+
+def test_batch_benchmark_runs_cases_for_selected_strategies_and_saves(monkeypatch):
+    chunks = [{"id": 11, "document_id": 3, "filename": "notes.txt", "content": "Python is a programming language."}]
+    monkeypatch.setattr(main, "get_all_chunks", lambda: chunks)
+    monkeypatch.setattr(main, "embed_query", lambda question: [0.1, 0.2])
+    def fake_retrieve(question, stored, k, **kwargs):
+        return [{"chunk_id": 11, "content": stored[0]["content"]}]
+    monkeypatch.setattr(main, "retrieve", fake_retrieve)
+    saved = []
+    monkeypatch.setattr(main, "save_experiment", lambda name, config, metrics, notes: saved.append((name, metrics)) or len(saved) + 1)
+    payload = {
+        "dataset_name": "smoke-suite",
+        "cases": [
+            {"query_id": "q1", "question": "What is Python?", "relevant_chunk_ids": [11],
+             "reference_answer": "Python programming language", "k": 3},
+            {"query_id": "q2", "question": "Define Python", "relevant_chunk_ids": [11],
+             "reference_answer": "Python language", "k": 1},
+        ],
+        "strategies": ["tfidf", "hybrid"],
+    }
+    with client(monkeypatch) as test_client:
+        response = test_client.post("/api/benchmark/run", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["case_count"] == 2
+    assert set(body["strategies"]) == {"tfidf", "hybrid"}
+    assert body["strategies"]["hybrid"]["metrics"]["recall_at_k"] == 1.0
+    assert body["strategies"]["hybrid"]["metrics"]["latency_p95_ms"] >= 0
+    assert len(body["strategies"]["tfidf"]["cases"]) == 2
+    assert len(saved) == 2
+
+
+def test_batch_benchmark_rejects_duplicate_query_ids(monkeypatch):
+    payload = {"cases": [
+        {"query_id": "same", "question": "Q1", "relevant_chunk_ids": [1], "reference_answer": "A"},
+        {"query_id": "same", "question": "Q2", "relevant_chunk_ids": [1], "reference_answer": "A"},
+    ]}
+    with client(monkeypatch) as test_client:
+        response = test_client.post("/api/benchmark/run", json=payload)
+    assert response.status_code == 400
+    assert "unique" in response.json()["detail"]
