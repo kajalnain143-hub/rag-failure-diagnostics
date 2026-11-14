@@ -38,6 +38,7 @@ export default function App() {
     cases: [{ query_id: "q1", question: "Ask a question about your indexed documents", relevant_chunk_ids: [1], reference_answer: "Replace with the expected answer", k: 5 }]
   }, null, 2));
   const [batchResult, setBatchResult] = useState(null);
+  const [mmrTuneResult, setMmrTuneResult] = useState(null);
   const [baselineRunId, setBaselineRunId] = useState("");
   const [currentRunId, setCurrentRunId] = useState("");
   const [regressionResult, setRegressionResult] = useState(null);
@@ -269,6 +270,41 @@ export default function App() {
       setBatchResult(data);
       await loadExperiments();
       setMessage(`Batch benchmark complete: ${data.case_count} cases across ${Object.keys(data.strategies).length} strategies. Runs saved.`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setDashboardBusy(false);
+    }
+  }
+
+  async function tuneMmrParameters() {
+    let dataset;
+    try {
+      dataset = JSON.parse(batchDataset);
+    } catch {
+      setMessage("Batch dataset must be valid JSON before tuning MMR.");
+      return;
+    }
+    if (!Array.isArray(dataset.cases) || dataset.cases.length === 0) {
+      setMessage("Add labeled cases to the batch dataset before tuning MMR.");
+      return;
+    }
+    setDashboardBusy(true);
+    setMessage("");
+    setMmrTuneResult(null);
+    try {
+      const data = await apiRequest("/api/benchmark/tune-mmr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dataset_name: dataset.dataset_name || "mmr-tuning",
+          cases: dataset.cases,
+          diversity_values: [0.0, 0.2, 0.35, 0.5, 0.7, 1.0]
+        })
+      });
+      setMmrTuneResult(data);
+      await loadExperiments();
+      setMessage(`MMR tuning complete: ${data.sweep_count} settings compared.`);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -676,6 +712,29 @@ export default function App() {
             </>}
           </div>
           <p className="hint">Ranking metrics require manually labeled relevant chunks. Evidence-term coverage is lexical—not a semantic faithfulness score.</p>
+          <div className="subsection">
+            <div className="eyebrow">RETRIEVAL PARAMETER OPTIMIZATION</div>
+            <h3>MMR diversity tuning</h3>
+            <p className="hint">Reuse the labeled cases above to compare six MMR diversity settings. This makes additional embedding calls; use a small dataset with a free Gemini quota.</p>
+            <button className="secondary compact" onClick={tuneMmrParameters} disabled={dashboardBusy}>{dashboardBusy ? "Tuning..." : "Tune MMR diversity"}</button>
+            {mmrTuneResult && <>
+              <div className="diagnostic">
+                <div><div className="eyebrow">RECOMMENDED SETTING FOR THIS DATASET</div><strong>{mmrTuneResult.best_mmr_diversity ?? "—"}</strong></div>
+                <div className="score">{mmrTuneResult.sweep_count}<small>settings compared</small></div>
+              </div>
+              <div className="table-wrap"><table className="experiment-table">
+                <thead><tr><th>Diversity</th><th>Quality score</th><th>Recall@K</th><th>MRR</th><th>nDCG@K</th><th>p95 latency</th><th>Experiment</th></tr></thead>
+                <tbody>{mmrTuneResult.runs.map(row => <tr key={row.experiment_id}>
+                  <td>{row.mmr_diversity}</td><td>{row.quality_score.toFixed(3)}</td>
+                  <td>{row.metrics.recall_at_k.toFixed(3)}</td><td>{row.metrics.mrr.toFixed(3)}</td>
+                  <td>{row.metrics.ndcg_at_k.toFixed(3)}</td><td>{row.metrics.latency_p95_ms.toFixed(2)} ms</td>
+                  <td>#{row.experiment_id}</td>
+                </tr>)}</tbody>
+              </table></div>
+              <p className="hint">{mmrTuneResult.selection_rule} {mmrTuneResult.note}</p>
+            </>}
+          </div>
+
         </div>
       </section>
 
