@@ -4,7 +4,7 @@ from app.benchmark_regression import compare_benchmark_runs
 
 
 def run(run_id, metrics, dataset="support-v1", strategy="hybrid", count=20):
-    return {"id": run_id, "config": {"dataset_name": dataset, "strategy": strategy, "case_count": count},
+    return {"id": run_id, "config": {"dataset_name": dataset, "strategy": strategy, "case_count": count, "corpus_fingerprint": "corpus-sha", "dataset_fingerprint": "dataset-sha"},
             "metrics": metrics}
 
 
