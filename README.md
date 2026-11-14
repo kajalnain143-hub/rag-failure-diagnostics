@@ -168,6 +168,9 @@ The expected-answer coverage score measures lexical term overlap between the ref
 - [x] Model-assisted faithfulness evaluation and labeled retrieval benchmark tooling
 - [x] Persistent experiment runs and comparison dashboard
 - [x] Batch dataset benchmarking with latency summaries
+- [x] Explainable per-query retrieval failure diagnostics
+- [x] Benchmark dataset validation against current corpus chunk IDs
+- [x] Bounded MMR diversity tuning sweep with saved experiments
 - [x] Benchmark regression gates for comparable saved runs
 - [x] Historical benchmark reports with CSV export
 - [x] Immutable benchmark snapshots and SHA-256 corpus/dataset fingerprints
@@ -180,9 +183,19 @@ The expected-answer coverage score measures lexical term overlap between the ref
 - [x] Optional bearer-token API authentication and configurable process-local rate limiting
 - [x] Production-oriented Docker images, health checks, non-root backend, and deployment checklist\n- [ ] Cloud deployment and public demo
 
-## Project status
+## Project status and completion gates
 
-**Active development — retrieval evaluation, answer grounding, experiment tracking, and query observability implemented.** Repository changes have not yet been run in your Windows environment or against a live Gemini API key. Test results, live API behavior, and deployment will be reported only after verification.
+**Application feature implementation:** the repository includes document ingestion, grounded RAG, hybrid retrieval, incident diagnostics, traces, labeled evaluation, immutable benchmark snapshots, replay, strategy comparison, failure analytics, MMR tuning, regression gates, and a React dashboard.
+
+**Not yet verified / not included in a 100% completion claim:**
+- GitHub Actions runs must finish successfully. A queued run is not a passing test.
+- Docker images and the full Windows setup must be built and exercised.
+- Render backend and frontend must both reach Live; health, authenticated API, browser CORS, upload, Gemini query, benchmark and incident workflows must be smoke-tested.
+- The current Render Blueprint stores SQLite under `/tmp`, which is ephemeral. Documents, traces, incidents and benchmark history can be lost on restart/redeploy. Durable hosted use needs persistent storage and backups.
+- PostgreSQL + pgvector is not implemented. Current dense retrieval uses Gemini embeddings stored with SQLite.
+- A real manually labeled corpus benchmark and real Gemini answer-grounding review are required before publishing performance claims.
+
+This repository is a portfolio/demo implementation, not a production-certified service. Do not publish API tokens or Gemini keys. See [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) for the remaining release checks.
 
 
 ## Docker
