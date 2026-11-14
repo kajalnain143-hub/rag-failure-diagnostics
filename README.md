@@ -143,6 +143,8 @@ The expected-answer coverage score measures lexical term overlap between the ref
 - [x] Persistent experiment runs and comparison dashboard
 - [x] Batch dataset benchmarking with latency summaries
 - [x] Benchmark regression gates for comparable saved runs
+- [x] Batch dataset benchmarking with latency summaries
+- [x] Benchmark regression gates for comparable saved runs
 - [ ] PostgreSQL + pgvector storage option
 - [x] Docker and CI workflow configuration (execution still pending verification)\n- [ ] Deployment and public demo
 
