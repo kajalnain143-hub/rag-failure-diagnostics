@@ -23,6 +23,7 @@ from .evaluation_metrics import aggregate_metrics, evaluate_case
 from .answer_quality import context_precision_recall, evaluate_answer_grounding
 from .trace_store import init_trace_store, save_trace, list_traces, get_trace
 from .benchmark_runner import ALLOWED_STRATEGIES, run_dataset
+from .benchmark_regression import compare_benchmark_runs
 
 app = FastAPI(
     title="RAG Failure Diagnostics API",
@@ -395,6 +396,28 @@ def run_batch_benchmark(payload: dict):
         return run_dataset(dataset_name, clean_cases, strategies, chunks,
                            embed_query, retrieve, save_experiment, float(diversity))
     except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/benchmark/regression")
+def benchmark_regression_check(payload: dict):
+    """Compare two saved batch benchmark runs and flag quality regressions."""
+    baseline_id = payload.get("baseline_run_id")
+    current_id = payload.get("current_run_id")
+    tolerance = payload.get("max_metric_drop", 0.05)
+    for field, value in (("baseline_run_id", baseline_id), ("current_run_id", current_id)):
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise HTTPException(status_code=400, detail=f"{field} must be a positive integer.")
+    if baseline_id == current_id:
+        raise HTTPException(status_code=400, detail="Choose two different experiment runs.")
+    if isinstance(tolerance, bool) or not isinstance(tolerance, (int, float)) or not 0 <= tolerance <= 1:
+        raise HTTPException(status_code=400, detail="max_metric_drop must be between 0 and 1.")
+    runs = {run["id"]: run for run in list_experiments(100)}
+    if baseline_id not in runs or current_id not in runs:
+        raise HTTPException(status_code=404, detail="One or both runs were not found in the latest 100 saved experiments.")
+    try:
+        return compare_benchmark_runs(runs[baseline_id], runs[current_id], float(tolerance))
+    except (KeyError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
