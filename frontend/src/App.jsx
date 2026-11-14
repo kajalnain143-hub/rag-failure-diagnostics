@@ -51,6 +51,20 @@ export default function App() {
     setExperiments(data.experiments || []);
   }
 
+  async function loadTraces() {
+    const data = await apiRequest("/api/traces?limit=30");
+    setTraces(data.traces || []);
+  }
+
+  async function inspectTrace(traceId) {
+    try {
+      const data = await apiRequest(`/api/traces/${traceId}`);
+      setSelectedTrace(data.trace);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   useEffect(() => {
     loadDocuments();
     loadExperiments().catch(() => {});\n    loadTraces().catch(() => {});
