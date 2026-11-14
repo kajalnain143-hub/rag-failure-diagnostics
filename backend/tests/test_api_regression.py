@@ -311,3 +311,42 @@ def test_snapshot_replay_rejects_corrupted_snapshot(monkeypatch):
         response = test_client.post("/api/benchmark/snapshots/5/replay", json={"strategies": ["tfidf"]})
     assert response.status_code == 409
     assert "fingerprint mismatch" in response.json()["detail"]
+
+
+def test_mmr_tuning_sweep_runs_same_labeled_cases_for_each_value(monkeypatch):
+    chunks = [{"id": 11, "document_id": 3, "filename": "notes.txt",
+               "content": "Python is a programming language."}]
+    monkeypatch.setattr(main, "get_all_chunks", lambda: chunks)
+    monkeypatch.setattr(main, "embed_query", lambda question: [0.1, 0.2])
+    monkeypatch.setattr(main, "retrieve", lambda question, stored, k, **kwargs: [
+        {"chunk_id": 11, "content": stored[0]["content"]}
+    ])
+    saved = []
+    monkeypatch.setattr(main, "save_experiment",
+                        lambda name, config, metrics, notes: saved.append(config) or len(saved) + 1)
+    payload = {
+        "dataset_name": "mmr-tuning-suite",
+        "diversity_values": [0.0, 0.5],
+        "cases": [{"query_id": "q1", "question": "What is Python?",
+                   "relevant_chunk_ids": [11], "reference_answer": "Python programming language", "k": 3}],
+    }
+    with client(monkeypatch) as test_client:
+        response = test_client.post("/api/benchmark/tune-mmr", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sweep_count"] == 2
+    assert body["best_mmr_diversity"] in [0.0, 0.5]
+    assert [item["mmr_diversity"] for item in body["runs"]] == [0.0, 0.5]
+    assert len(saved) == 2
+    assert all(item["strategy"] == "hybrid_mmr" for item in saved)
+
+
+def test_mmr_tuning_rejects_duplicate_diversity_values(monkeypatch):
+    with client(monkeypatch) as test_client:
+        response = test_client.post("/api/benchmark/tune-mmr", json={
+            "diversity_values": [0.2, 0.2],
+            "cases": [{"query_id": "q1", "question": "Q",
+                       "relevant_chunk_ids": [1], "reference_answer": "A"}],
+        })
+    assert response.status_code == 400
+    assert "2–7 unique numbers" in response.json()["detail"]
