@@ -180,3 +180,38 @@ def test_benchmark_regression_rejects_unmatched_runs(monkeypatch):
             "baseline_run_id": 10, "current_run_id": 11})
     assert response.status_code == 400
     assert "not comparable" in response.json()["detail"]
+
+
+def test_benchmark_report_returns_history_and_trends(monkeypatch):
+    metrics = {"recall_at_k": 0.9, "mrr": 0.8, "ndcg_at_k": 0.85,
+               "evidence_term_coverage": 0.7, "latency_avg_ms": 10.0,
+               "latency_p50_ms": 9.0, "latency_p95_ms": 15.0}
+    runs = [
+        {"id": 2, "name": "new", "created_at": "2026-11-02",
+         "config": {"dataset_name": "suite", "strategy": "hybrid", "case_count": 2},
+         "metrics": {**metrics, "recall_at_k": 0.8}},
+        {"id": 1, "name": "old", "created_at": "2026-11-01",
+         "config": {"dataset_name": "suite", "strategy": "hybrid", "case_count": 2},
+         "metrics": metrics},
+    ]
+    monkeypatch.setattr(main, "list_experiments", lambda limit: runs)
+    with client(monkeypatch) as test_client:
+        response = test_client.get("/api/benchmark/report?dataset_name=suite&strategy=hybrid")
+    assert response.status_code == 200
+    assert response.json()["run_count"] == 2
+    assert response.json()["trends"]["recall_at_k"]["delta"] == -0.1
+
+
+def test_benchmark_report_csv_download(monkeypatch):
+    metrics = {"recall_at_k": 0.9, "mrr": 0.8, "ndcg_at_k": 0.85,
+               "evidence_term_coverage": 0.7, "latency_avg_ms": 10.0,
+               "latency_p50_ms": 9.0, "latency_p95_ms": 15.0}
+    runs = [{"id": 1, "name": "run", "created_at": "2026-11-01",
+             "config": {"dataset_name": "suite", "strategy": "hybrid", "case_count": 2},
+             "metrics": metrics}]
+    monkeypatch.setattr(main, "list_experiments", lambda limit: runs)
+    with client(monkeypatch) as test_client:
+        response = test_client.get("/api/benchmark/report.csv?dataset_name=suite&strategy=hybrid")
+    assert response.status_code == 200
+    assert "text/csv" in response.headers["content-type"]
+    assert "recall_at_k" in response.text
