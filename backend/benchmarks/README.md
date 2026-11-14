@@ -52,6 +52,20 @@ compatible vectors. If embeddings are unavailable, it falls back to TF-IDF chunk
 similarity, so the comparison remains usable without a Gemini API key. The default
 diversity weight is 0.35; larger values penalize redundancy more strongly.
 
+## Per-query failure explanations
+
+Each strategy result from `POST /api/benchmark/compare` now includes
+`failure_diagnostics`. It classifies a labeled query as a retrieval miss,
+ranking-quality issue, low lexical evidence coverage, multiple signals, or no
+threshold failure. Each signal includes severity, observed metric evidence, and
+concrete inspection steps.
+
+These explanations are deterministic hypotheses based on manually supplied gold
+chunk labels and lexical metrics. They are not automatic root-cause proof and a
+healthy retrieval score does not establish answer faithfulness; use
+`POST /api/quality/evaluate` for a separate model-assisted grounding check and
+review its claims manually.
+
 ## Answer grounding evaluation
 
 The API exposes `POST /api/quality/evaluate` for model-assisted answer evaluation.
