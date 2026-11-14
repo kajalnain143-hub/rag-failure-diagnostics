@@ -1,0 +1,54 @@
+services:
+  - type: web
+    name: rag-failure-diagnostics-api-kajal
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: RAG_DB_PATH
+        value: /tmp/rag_diagnostics.db
+      - key: LOG_LEVEL
+        value: INFO
+      - key: API_RATE_LIMIT
+        value: "60"
+      - key: API_RATE_WINDOW_SECONDS
+        value: "60"
+      - key: API_AUTH_TOKEN
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_EMBEDDING_MODEL
+        value: gemini-embedding-001
+      - key: CORS_ORIGINS
+        value: https://rag-failure-diagnostics-web-kajal.onrender.com
+
+  - type: web
+    name: rag-failure-diagnostics-web-kajal
+    runtime: static
+    plan: free
+    buildCommand: cd frontend && npm install --no-audit --no-fund && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://rag-failure-diagnostics-api-kajal.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
