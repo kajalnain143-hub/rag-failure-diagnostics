@@ -37,7 +37,7 @@ export default function App() {
   const [regressionResult, setRegressionResult] = useState(null);
   const [reportDatasetName, setReportDatasetName] = useState("my-rag-regression-suite");
   const [reportStrategy, setReportStrategy] = useState("hybrid");
-  const [benchmarkReport, setBenchmarkReport] = useState(null);
+  const [benchmarkReport, setBenchmarkReport] = useState(null);\n  const [benchmarkInsights, setBenchmarkInsights] = useState(null);
   const [replayBusy, setReplayBusy] = useState(false);
   const [qualityResult, setQualityResult] = useState(null);
   const [message, setMessage] = useState("");
@@ -294,6 +294,23 @@ export default function App() {
       const data = await apiRequest(`/api/benchmark/report?${query.toString()}`);
       setBenchmarkReport(data);
       setMessage(`Loaded ${data.run_count} historical benchmark run(s).`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setDashboardBusy(false);
+    }
+  }
+
+  async function generateBenchmarkInsights() {
+    if (!reportDatasetName.trim()) return setMessage("Enter a dataset name for insights.");
+    setDashboardBusy(true);
+    setMessage("");
+    setBenchmarkInsights(null);
+    try {
+      const query = new URLSearchParams({ dataset_name: reportDatasetName.trim() });
+      const data = await apiRequest(`/api/benchmark/insights?${query.toString()}`);
+      setBenchmarkInsights(data);
+      setMessage(data.strategy_count ? "Benchmark intelligence generated." : "No comparable benchmark runs found yet.");
     } catch (error) {
       setMessage(error.message);
     } finally {
