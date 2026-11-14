@@ -379,11 +379,11 @@ def run_batch_benchmark(payload: dict):
             raise HTTPException(status_code=400, detail=f"Case {query_id} needs a non-empty integer relevant_chunk_ids array.")
         if not isinstance(reference, str) or not reference.strip():
             raise HTTPException(status_code=400, detail=f"Case {query_id} needs a non-empty reference_answer.")
-        try:
-            k = int(case.get("k", 5))
-        except (TypeError, ValueError):
+        raw_k = case.get("k", 5)
+        if isinstance(raw_k, bool) or not isinstance(raw_k, int):
             raise HTTPException(status_code=400, detail=f"Case {query_id}: k must be an integer from 1 to 10.")
-        if isinstance(case.get("k", 5), bool) or not 1 <= k <= 10:
+        k = raw_k
+        if not 1 <= k <= 10:
             raise HTTPException(status_code=400, detail=f"Case {query_id}: k must be an integer from 1 to 10.")
         seen_ids.add(query_id)
         clean_cases.append({"query_id": query_id, "question": question.strip(),
