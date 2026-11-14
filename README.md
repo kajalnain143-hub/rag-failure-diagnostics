@@ -92,6 +92,7 @@ The regression suite covers SQLite persistence, chunking and retrieval, benchmar
 | GET | `/` | API information |
 | GET | `/health` | Database readiness check |
 | GET | `/api/documents` | List indexed documents |
+| GET | `/api/admin/database-backup` | Download a consistent SQLite backup (bearer token required) |
 | POST | `/api/documents/upload` | Upload PDF, TXT, or Markdown |
 | POST | `/api/query` | Retrieve evidence, diagnose, and optionally generate a Gemini answer |
 | POST | `/api/evaluate` | Baseline retrieval evaluation |
@@ -139,6 +140,26 @@ The API returns an `X-Request-ID` response header and basic browser security hea
 For Docker, configure `CORS_ORIGINS`, `LOG_LEVEL`, `API_AUTH_TOKEN`, and `VITE_API_URL` in the environment before building. The backend image runs as a non-root user; both services expose container health checks, and the frontend waits for backend readiness. The browser must be able to reach the URL embedded in `VITE_API_URL`; never use the internal Compose hostname for a browser-facing build. `VITE_API_URL` is embedded in the frontend at build time; use the public browser-reachable API URL, not the internal Compose service hostname.
 
 These are baseline hardening measures, not a complete production security review. Bearer-token API authentication can be enabled with API_AUTH_TOKEN; an in-memory per-process, per-client fixed-window rate limit is configurable with API_RATE_LIMIT and API_RATE_WINDOW_SECONDS. Set a strong random token before exposing the API. The limiter is not distributed across workers/replicas; use a gateway or shared store for multi-instance production. TLS termination, managed secret storage, persistent abuse monitoring, and a full security review are still required.
+
+## SQLite backup and recovery
+
+The API exposes `GET /api/admin/database-backup` to download a consistent
+SQLite online backup. The endpoint is protected by the same bearer-token
+middleware as every other `/api/*` route and sends `Cache-Control: no-store`.
+Treat the downloaded file as sensitive: it contains uploaded source documents,
+embeddings, incidents, traces, and benchmark history.
+
+PowerShell example (keep the token out of source control and shell history):
+
+```powershell
+$headers = @{ Authorization = "Bearer $env:API_AUTH_TOKEN" }
+Invoke-WebRequest -Uri "https://YOUR-BACKEND.onrender.com/api/admin/database-backup" -Headers $headers -OutFile "rag-diagnostics-backup.sqlite3"
+```
+
+This endpoint is a backup export, not a restore API. Restore only while the
+service is stopped, after validating the backup and preserving a separate copy.
+For Render's current ephemeral `/tmp` database, schedule and download backups
+before redeploys/restarts; this does not make storage durable or automatic.
 
 ## Query observability
 
