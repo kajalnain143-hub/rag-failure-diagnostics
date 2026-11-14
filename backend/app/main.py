@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pypdf import PdfReader
 
-from .database import get_all_chunks, get_documents, get_connection, init_db, save_document
+from .database import get_all_chunks, get_documents, get_connection, init_db, save_document, create_database_backup
 from .diagnostics import diagnose, evaluate_retrieval
 from .llm import LLMGenerationError, LLMNotConfiguredError, generate_grounded_answer
 from .embeddings import EMBEDDING_MODEL, embed_query, embed_text
@@ -144,6 +144,22 @@ def health_check():
         logger.exception("Database readiness check failed")
         raise HTTPException(status_code=503, detail="Database is unavailable.") from exc
     return {"status": "healthy", "database": "ready", "service": "rag-failure-diagnostics-api"}
+
+
+@app.get("/api/admin/database-backup")
+def download_database_backup():
+    """Download a consistent SQLite backup; protect this endpoint with API_AUTH_TOKEN."""
+    try:
+        backup = create_database_backup()
+    except Exception as exc:
+        logger.exception("Database backup failed")
+        raise HTTPException(status_code=503, detail="Database backup could not be created.") from exc
+    return Response(
+        content=backup,
+        media_type="application/vnd.sqlite3",
+        headers={"Content-Disposition": 'attachment; filename="rag-diagnostics-backup.sqlite3"',
+                 "Cache-Control": "no-store"},
+    )
 
 
 @app.get("/api/documents")
