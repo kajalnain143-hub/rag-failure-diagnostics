@@ -37,7 +37,8 @@ export default function App() {
   const [regressionResult, setRegressionResult] = useState(null);
   const [reportDatasetName, setReportDatasetName] = useState("my-rag-regression-suite");
   const [reportStrategy, setReportStrategy] = useState("hybrid");
-  const [benchmarkReport, setBenchmarkReport] = useState(null);\n  const [benchmarkInsights, setBenchmarkInsights] = useState(null);
+  const [benchmarkReport, setBenchmarkReport] = useState(null);
+  const [benchmarkInsights, setBenchmarkInsights] = useState(null);
   const [replayBusy, setReplayBusy] = useState(false);
   const [qualityResult, setQualityResult] = useState(null);
   const [message, setMessage] = useState("");
